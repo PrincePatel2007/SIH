@@ -963,6 +963,59 @@ class NetworkGraph:
 
         return None  # No path found.
 
+    def find_path_excluding_segments(
+        self,
+        start_node_id: str,
+        end_node_id: str,
+        excluded_segment_ids: set[str],
+    ) -> Optional[list[str]]:
+        """
+        BFS pathfinding that skips any segment whose id is in
+        *excluded_segment_ids*.
+
+        Used by conditions.py when a maintenance window makes one or more
+        segments impassable: call this with the segment(s) covering the
+        blocked blocks, and it returns an alternate route if one exists,
+        or None if the network is fully partitioned.
+
+        Parameters
+        ----------
+        start_node_id : str
+        end_node_id : str
+        excluded_segment_ids : set[str]
+            Segment ids to treat as impassable for this search only.
+            The graph itself is NOT mutated.
+
+        Returns
+        -------
+        list[str] | None
+            Ordered segment_ids of the alternate route, or None.
+        """
+        self._require_node(start_node_id)
+        self._require_node(end_node_id)
+
+        if start_node_id == end_node_id:
+            return []
+
+        queue: deque[tuple[str, list[str]]] = deque()
+        queue.append((start_node_id, []))
+        visited: set[str] = {start_node_id}
+
+        while queue:
+            current, path = queue.popleft()
+            for neighbour, seg_id in self._adjacency.get(current, {}).items():
+                if neighbour in visited:
+                    continue
+                if seg_id in excluded_segment_ids:
+                    continue  # treat this segment as impassable
+                new_path = path + [seg_id]
+                if neighbour == end_node_id:
+                    return new_path
+                visited.add(neighbour)
+                queue.append((neighbour, new_path))
+
+        return None  # No alternate path found.
+
     def find_path_blocks(
         self,
         start_node_id: str,
