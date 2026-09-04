@@ -1,0 +1,16 @@
+# ────────────────────────────────────────────────────────────
+# TrainNet ETA Simulator — Backend Requirements
+# Python >= 3.9
+# Generated from pyproject.toml
+# ────────────────────────────────────────────────────────────
+
+# ── Core / Production ────────────────────────────────────────
+fastapi>=0.111
+pydantic>=2.7
+uvicorn[standard]>=0.30
+websockets>=12
+
+# ── Development / Testing ────────────────────────────────────
+httpx>=0.27
+pytest>=8
+pytest-asyncio>=0.23
