@@ -768,6 +768,7 @@ export default function SimulatorCanvas({ layoutName, onClose }: Props) {
             stationMap={stationMap}
             eventLog={snap.event_log ?? []}
             onClose={() => setSelectedTrainId(null)}
+            layoutName={layoutName}
           />
         )}
       </div>

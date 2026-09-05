@@ -63,6 +63,13 @@ export default function App() {
     setMode("simulator");
   }
 
+  // ── Load Demo shortcut ───────────────────────────────────────────────────
+  function loadDemoNetwork() {
+    setSimLayout("demo");
+    setActiveName("demo");
+    setMode("simulator");
+  }
+
   // ── Derived ──────────────────────────────────────────────────────────────
   const statusLabel = {
     checking:  "Backend: checking…",
@@ -141,6 +148,27 @@ export default function App() {
                 }}
               >
                 ▶ Simulate
+              </button>
+
+              {/* Load Demo button */}
+              <button
+                id="btn-load-demo"
+                onClick={loadDemoNetwork}
+                title="Load the built-in conflict demo network (3 stations, 1 junction, 4 trains)"
+                style={{
+                  background:   "#7c3aed",
+                  border:       "none",
+                  borderRadius: 5,
+                  color:        "#fff",
+                  cursor:       "pointer",
+                  fontSize:     11,
+                  fontWeight:   700,
+                  padding:      "5px 10px",
+                  transition:   "opacity 0.12s",
+                  whiteSpace:   "nowrap",
+                }}
+              >
+                ⚡ Demo Network
               </button>
             </div>
 

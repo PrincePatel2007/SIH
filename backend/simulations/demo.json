@@ -1,298 +1,443 @@
 {
-  "tracks": [
-    {
-      "id": "trk-1",
-      "segment_id": "seg-AB",
-      "geometry": [
-        {
-          "x": 100.0,
-          "y": 300.0
-        },
-        {
-          "x": 200.0,
-          "y": 290.0
-        },
-        {
-          "x": 300.0,
-          "y": 305.0
-        },
-        {
-          "x": 400.0,
-          "y": 300.0
-        }
-      ],
-      "directionality": "bidirectional",
-      "restricted_to_priority": null
-    },
-    {
-      "id": "trk-2",
-      "segment_id": "seg-XB",
-      "geometry": [
-        {
-          "x": 400.0,
-          "y": 300.0
-        },
-        {
-          "x": 550.0,
-          "y": 295.0
-        },
-        {
-          "x": 700.0,
-          "y": 300.0
-        }
-      ],
-      "directionality": "bidirectional",
-      "restricted_to_priority": null
-    },
-    {
-      "id": "trk-3",
-      "segment_id": "seg-branch",
-      "geometry": [
-        {
-          "x": 400.0,
-          "y": 300.0
-        },
-        {
-          "x": 400.0,
-          "y": 200.0
-        },
-        {
-          "x": 400.0,
-          "y": 100.0
-        }
-      ],
-      "directionality": "one_way_forward",
-      "restricted_to_priority": null
-    }
-  ],
   "segments": [
     {
-      "id": "seg-AB",
-      "start_node_id": "sta-A",
-      "end_node_id": "jct-X",
+      "id": "seg-AJ",
+      "start_node_id": "sta-alpha",
+      "end_node_id": "jct-center",
       "ordered_block_ids": [
-        "blk-AB-0",
-        "blk-AB-1",
-        "blk-AB-2"
+        "blk-AJ-1",
+        "blk-AJ-2",
+        "blk-AJ-3"
       ]
     },
     {
-      "id": "seg-XB",
-      "start_node_id": "jct-X",
-      "end_node_id": "sta-B",
+      "id": "seg-BJ",
+      "start_node_id": "sta-beta",
+      "end_node_id": "jct-center",
       "ordered_block_ids": [
-        "blk-XB-0",
-        "blk-XB-1"
+        "blk-BJ-1",
+        "blk-BJ-2"
       ]
     },
     {
-      "id": "seg-branch",
-      "start_node_id": "jct-X",
-      "end_node_id": "sta-C",
+      "id": "seg-JG",
+      "start_node_id": "jct-center",
+      "end_node_id": "sta-gamma",
       "ordered_block_ids": [
-        "blk-br-0",
-        "blk-br-1"
+        "blk-JG-1",
+        "blk-JG-2",
+        "blk-JG-3",
+        "blk-JG-4",
+        "blk-JG-5",
+        "blk-JG-6",
+        "blk-JG-7",
+        "blk-JG-8"
+      ]
+    },
+    {
+      "id": "seg-siding",
+      "start_node_id": "jct-center",
+      "end_node_id": "sta-siding-end",
+      "ordered_block_ids": [
+        "blk-SD-1",
+        "blk-SD-2"
+      ]
+    }
+  ],
+  "tracks": [
+    {
+      "id": "trk-AJ",
+      "segment_id": "seg-AJ",
+      "directionality": "bidirectional",
+      "geometry": [
+        {
+          "x": 100,
+          "y": 300
+        },
+        {
+          "x": 250,
+          "y": 300
+        },
+        {
+          "x": 400,
+          "y": 300
+        }
+      ]
+    },
+    {
+      "id": "trk-BJ",
+      "segment_id": "seg-BJ",
+      "directionality": "bidirectional",
+      "geometry": [
+        {
+          "x": 400,
+          "y": 460
+        },
+        {
+          "x": 400,
+          "y": 380
+        },
+        {
+          "x": 400,
+          "y": 300
+        }
+      ]
+    },
+    {
+      "id": "trk-JG",
+      "segment_id": "seg-JG",
+      "directionality": "bidirectional",
+      "geometry": [
+        {
+          "x": 400,
+          "y": 300
+        },
+        {
+          "x": 463,
+          "y": 300
+        },
+        {
+          "x": 525,
+          "y": 300
+        },
+        {
+          "x": 550,
+          "y": 280
+        },
+        {
+          "x": 575,
+          "y": 260
+        },
+        {
+          "x": 600,
+          "y": 280
+        },
+        {
+          "x": 650,
+          "y": 300
+        },
+        {
+          "x": 700,
+          "y": 300
+        }
+      ]
+    },
+    {
+      "id": "trk-siding",
+      "segment_id": "seg-siding",
+      "directionality": "bidirectional",
+      "geometry": [
+        {
+          "x": 400,
+          "y": 300
+        },
+        {
+          "x": 400,
+          "y": 220
+        },
+        {
+          "x": 480,
+          "y": 220
+        }
       ]
     }
   ],
   "stations": [
     {
-      "id": "sta-A",
-      "name": "Alpha",
+      "id": "sta-alpha",
+      "name": "Alpha Terminus",
       "platform_tracks": [
-        "trk-1"
+        "trk-AJ"
       ],
-      "rotation_deg": 0.0,
+      "rotation_deg": 0,
       "station_type": "terminus"
     },
     {
-      "id": "sta-B",
-      "name": "Beta",
+      "id": "sta-beta",
+      "name": "Beta Station",
       "platform_tracks": [
-        "trk-2"
+        "trk-BJ"
       ],
-      "rotation_deg": 0.0,
+      "rotation_deg": 0,
+      "station_type": "through"
+    },
+    {
+      "id": "sta-gamma",
+      "name": "Gamma Terminus",
+      "platform_tracks": [
+        "trk-JG"
+      ],
+      "rotation_deg": 0,
       "station_type": "terminus"
     },
     {
-      "id": "sta-C",
-      "name": "Gamma",
+      "id": "sta-siding-end",
+      "name": "Siding Loop",
       "platform_tracks": [
-        "trk-3"
+        "trk-siding"
       ],
-      "rotation_deg": 0.0,
-      "station_type": "junction_station"
+      "rotation_deg": 0,
+      "station_type": "terminus"
     }
   ],
   "junctions": [
     {
-      "id": "jct-X",
+      "id": "jct-center",
       "connected_segment_ids": [
-        "seg-AB",
-        "seg-XB",
-        "seg-branch"
+        "seg-AJ",
+        "seg-BJ",
+        "seg-JG",
+        "seg-siding"
       ],
       "signal_states": {}
     }
   ],
   "signals": [
     {
-      "id": "sig-1",
-      "block_id": "blk-AB-0",
+      "id": "sig-AJ",
+      "block_id": "blk-AJ-3",
       "state": "green",
-      "controlled_by_junction_id": "jct-X"
+      "controlled_by_junction_id": "jct-center"
     },
     {
-      "id": "sig-2",
-      "block_id": "blk-XB-0",
-      "state": "caution",
-      "controlled_by_junction_id": "jct-X"
-    },
-    {
-      "id": "sig-3",
-      "block_id": "blk-br-0",
-      "state": "red",
-      "controlled_by_junction_id": "jct-X"
+      "id": "sig-BJ",
+      "block_id": "blk-BJ-2",
+      "state": "green",
+      "controlled_by_junction_id": "jct-center"
     }
   ],
   "trains": [
     {
-      "id": "train-001",
-      "name": "Express 1",
+      "id": "train-express-1",
+      "name": "Express-1",
       "color": "#6366f1",
       "priority": 1,
-      "num_carriages": 8,
-      "max_speed": 160.0,
-      "avg_speed": 120.0,
+      "num_carriages": 12,
+      "max_speed": 80.0,
+      "avg_speed": 60.0,
+      "driver_duty_status": "normal",
+      "current_block_id": null,
+      "current_position_in_block": 0.0,
       "route": [
         {
-          "node_id": "sta-A",
+          "node_id": "sta-alpha",
           "segment_id": null
         },
         {
-          "node_id": "jct-X",
-          "segment_id": "seg-AB"
+          "node_id": "jct-center",
+          "segment_id": "seg-AJ"
         },
         {
-          "node_id": "sta-B",
-          "segment_id": "seg-XB"
+          "node_id": "sta-gamma",
+          "segment_id": "seg-JG"
         }
       ],
       "schedule": {
-        "sta-A": {
+        "sta-alpha": {
           "scheduled_arrival": null,
-          "scheduled_departure": "2026-09-05T14:58:51.426268Z",
+          "scheduled_departure": "2026-09-06T08:00:00Z",
           "expected_arrival": null,
           "actual_arrival": null
         },
-        "jct-X": {
-          "scheduled_arrival": "2026-09-05T15:05:21.426268Z",
-          "scheduled_departure": "2026-09-05T15:05:21.426268Z",
+        "jct-center": {
+          "scheduled_arrival": "2026-09-06T08:03:00Z",
+          "scheduled_departure": "2026-09-06T08:03:00Z",
           "expected_arrival": null,
           "actual_arrival": null
         },
-        "sta-B": {
-          "scheduled_arrival": "2026-09-05T15:11:21.426268Z",
-          "scheduled_departure": "2026-09-05T15:11:21.426268Z",
+        "sta-gamma": {
+          "scheduled_arrival": "2026-09-06T08:11:00Z",
+          "scheduled_departure": null,
           "expected_arrival": null,
           "actual_arrival": null
         }
-      },
-      "driver_duty_status": "normal",
-      "current_block_id": null,
-      "current_position_in_block": 0.0
+      }
     },
     {
-      "id": "train-002",
-      "name": "Local 2",
+      "id": "train-local-2",
+      "name": "Local-2",
       "color": "#f59e0b",
       "priority": 3,
-      "num_carriages": 4,
-      "max_speed": 100.0,
-      "avg_speed": 80.0,
+      "num_carriages": 6,
+      "max_speed": 25.0,
+      "avg_speed": 20.0,
+      "driver_duty_status": "normal",
+      "current_block_id": null,
+      "current_position_in_block": 0.0,
       "route": [
         {
-          "node_id": "sta-B",
+          "node_id": "sta-beta",
           "segment_id": null
         },
         {
-          "node_id": "jct-X",
-          "segment_id": "seg-XB"
+          "node_id": "jct-center",
+          "segment_id": "seg-BJ"
         },
         {
-          "node_id": "sta-A",
-          "segment_id": "seg-AB"
+          "node_id": "sta-gamma",
+          "segment_id": "seg-JG"
         }
       ],
       "schedule": {
-        "sta-B": {
+        "sta-beta": {
           "scheduled_arrival": null,
-          "scheduled_departure": "2026-09-05T14:58:51.426268Z",
+          "scheduled_departure": "2026-09-06T08:00:00Z",
           "expected_arrival": null,
           "actual_arrival": null
         },
-        "jct-X": {
-          "scheduled_arrival": "2026-09-05T15:05:21.426268Z",
-          "scheduled_departure": "2026-09-05T15:05:21.426268Z",
+        "jct-center": {
+          "scheduled_arrival": "2026-09-06T08:06:00Z",
+          "scheduled_departure": "2026-09-06T08:06:00Z",
           "expected_arrival": null,
           "actual_arrival": null
         },
-        "sta-A": {
-          "scheduled_arrival": "2026-09-05T15:12:36.426268Z",
-          "scheduled_departure": "2026-09-05T15:12:36.426268Z",
+        "sta-gamma": {
+          "scheduled_arrival": "2026-09-06T08:30:00Z",
+          "scheduled_departure": null,
           "expected_arrival": null,
           "actual_arrival": null
         }
-      },
+      }
+    },
+    {
+      "id": "train-passenger-3",
+      "name": "Passenger-3",
+      "color": "#22c55e",
+      "priority": 2,
+      "num_carriages": 8,
+      "max_speed": 80.0,
+      "avg_speed": 50.0,
       "driver_duty_status": "normal",
       "current_block_id": null,
-      "current_position_in_block": 0.0
+      "current_position_in_block": 0.0,
+      "route": [
+        {
+          "node_id": "sta-alpha",
+          "segment_id": null
+        },
+        {
+          "node_id": "jct-center",
+          "segment_id": "seg-AJ"
+        },
+        {
+          "node_id": "sta-gamma",
+          "segment_id": "seg-JG"
+        }
+      ],
+      "schedule": {
+        "sta-alpha": {
+          "scheduled_arrival": null,
+          "scheduled_departure": "2026-09-06T08:02:00Z",
+          "expected_arrival": null,
+          "actual_arrival": null
+        },
+        "jct-center": {
+          "scheduled_arrival": "2026-09-06T08:05:36Z",
+          "scheduled_departure": "2026-09-06T08:05:36Z",
+          "expected_arrival": null,
+          "actual_arrival": null
+        },
+        "sta-gamma": {
+          "scheduled_arrival": "2026-09-06T08:15:12Z",
+          "scheduled_departure": null,
+          "expected_arrival": null,
+          "actual_arrival": null
+        }
+      }
+    },
+    {
+      "id": "train-freight-4",
+      "name": "Freight-4",
+      "color": "#ef4444",
+      "priority": 3,
+      "num_carriages": 20,
+      "max_speed": 50.0,
+      "avg_speed": 30.0,
+      "driver_duty_status": "normal",
+      "current_block_id": null,
+      "current_position_in_block": 0.0,
+      "route": [
+        {
+          "node_id": "sta-beta",
+          "segment_id": null
+        },
+        {
+          "node_id": "jct-center",
+          "segment_id": "seg-BJ"
+        }
+      ],
+      "schedule": {
+        "sta-beta": {
+          "scheduled_arrival": null,
+          "scheduled_departure": "2026-09-06T08:00:00Z",
+          "expected_arrival": null,
+          "actual_arrival": null
+        },
+        "jct-center": {
+          "scheduled_arrival": "2026-09-06T08:04:00Z",
+          "scheduled_departure": null,
+          "expected_arrival": null,
+          "actual_arrival": null
+        }
+      }
     }
   ],
-  "authoring_hints": [],
+  "authoring_hints": [
+    {
+      "train_id": "train-express-1",
+      "origin_departure_iso": "2026-09-06T08:00:00Z",
+      "dwell_minutes": {}
+    },
+    {
+      "train_id": "train-local-2",
+      "origin_departure_iso": "2026-09-06T08:00:00Z",
+      "dwell_minutes": {}
+    },
+    {
+      "train_id": "train-passenger-3",
+      "origin_departure_iso": "2026-09-06T08:02:00Z",
+      "dwell_minutes": {}
+    },
+    {
+      "train_id": "train-freight-4",
+      "origin_departure_iso": "2026-09-06T08:00:00Z",
+      "dwell_minutes": {}
+    }
+  ],
   "segment_overrides": [],
   "station_positions": {
-    "sta-A": {
+    "sta-alpha": {
       "x": 100,
       "y": 300
     },
-    "sta-B": {
+    "sta-beta": {
+      "x": 400,
+      "y": 460
+    },
+    "sta-gamma": {
       "x": 700,
       "y": 300
     },
-    "sta-C": {
-      "x": 400,
-      "y": 100
+    "sta-siding-end": {
+      "x": 480,
+      "y": 220
     }
   },
   "junction_positions": {
-    "jct-X": {
+    "jct-center": {
       "x": 400,
       "y": 300
     }
   },
   "signal_positions": {
-    "sig-1": {
-      "x": 130,
-      "y": 280
+    "sig-AJ": {
+      "x": 370,
+      "y": 285
     },
-    "sig-2": {
-      "x": 430,
-      "y": 280
-    },
-    "sig-3": {
-      "x": 400,
-      "y": 270
+    "sig-BJ": {
+      "x": 415,
+      "y": 340
     }
   },
-  "train_positions": {
-    "train-001": {
-      "x": 100,
-      "y": 300
-    },
-    "train-002": {
-      "x": 700,
-      "y": 300
-    }
-  }
+  "train_positions": {}
 }

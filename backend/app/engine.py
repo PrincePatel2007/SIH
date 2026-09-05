@@ -311,6 +311,29 @@ class SimulationEngine:
             raise ValueError(f"speed_multiplier must be > 0, got {x!r}.")
         self.speed_multiplier = x
 
+    def run_headless(
+        self,
+        duration_sim_seconds: float,
+        tick_size: float = 5.0,
+    ) -> None:
+        """
+        Advance the simulation by *duration_sim_seconds* of simulated time
+        without any real-time delay — useful for history replay and tests.
+
+        The engine must already be in the playing state (call play() first).
+
+        Args:
+            duration_sim_seconds: Total simulated seconds to advance.
+            tick_size: Simulated seconds per individual tick (default 5 s).
+                       Smaller values are more accurate; larger are faster.
+        """
+        remaining = duration_sim_seconds
+        while remaining > 0:
+            step = min(tick_size, remaining)
+            self.tick(step)
+            remaining -= step
+
+
     # -----------------------------------------------------------------------
     # Tick loop — the heart of the engine
     # -----------------------------------------------------------------------

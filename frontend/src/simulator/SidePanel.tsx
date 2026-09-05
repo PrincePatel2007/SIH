@@ -10,7 +10,9 @@
  */
 
 import type { CSSProperties } from "react";
+import { useState } from "react";
 import { useTheme } from "../theme";
+import HistoryView from "./HistoryView";
 
 // ---------------------------------------------------------------------------
 // Types (mirroring WS snapshot + TrainSnap shapes)
@@ -54,6 +56,7 @@ interface Props {
   stationMap:  Record<string, LayoutStation>;
   eventLog:    EventLogEntry[];
   onClose:     () => void;
+  layoutName:  string;             // needed for history API call
 }
 
 // ---------------------------------------------------------------------------
@@ -94,8 +97,9 @@ function DelayBadge({ mins }: { mins: number | null }) {
 // Component
 // ---------------------------------------------------------------------------
 
-export default function SidePanel({ train, simClock, stationMap, eventLog, onClose }: Props) {
+export default function SidePanel({ train, simClock, stationMap, eventLog, onClose, layoutName }: Props) {
   const { theme } = useTheme();
+  const [activeTab, setActiveTab] = useState<"schedule" | "history">("schedule");
 
   const panelStyle: CSSProperties = {
     width:         300,
@@ -207,78 +211,120 @@ export default function SidePanel({ train, simClock, stationMap, eventLog, onClo
         </div>
       </div>
 
-      {/* Upcoming stops */}
-      <div style={{ padding: "14px 16px 0", flex: 1, minHeight: 0 }}>
-        <span style={headingStyle}>Upcoming Stops</span>
-
-        {upcomingStops.length === 0 ? (
-          <p style={{ color: theme.textMuted, fontSize: 12, marginTop: 4 }}>
-            No upcoming stops.
-          </p>
-        ) : (
-          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11 }}>
-            <thead>
-              <tr style={{ color: theme.textSecondary }}>
-                <th style={{ textAlign: "left", paddingBottom: 6, fontWeight: 600 }}>Station</th>
-                <th style={{ textAlign: "right", paddingBottom: 6, fontWeight: 600 }}>Sched.</th>
-                <th style={{ textAlign: "right", paddingBottom: 6, fontWeight: 600 }}>ETA</th>
-                <th style={{ textAlign: "right", paddingBottom: 6, fontWeight: 600 }}>Delay</th>
-              </tr>
-            </thead>
-            <tbody>
-              {upcomingStops.map((hop) => {
-                const entry = train.schedule[hop.node_id]!;
-                const sta   = stationMap[hop.node_id];
-                const delay = delayMins(entry.expected_arrival, entry.scheduled_arrival);
-                const isNext = upcomingStops[0]?.node_id === hop.node_id;
-                return (
-                  <tr
-                    key={hop.node_id}
-                    style={{
-                      borderTop:  `1px solid ${theme.border}`,
-                      background: isNext ? `${theme.accent}15` : "transparent",
-                    }}
-                  >
-                    <td style={{ padding: "5px 0", color: isNext ? theme.accent : theme.textPrimary, fontWeight: isNext ? 600 : 400 }}>
-                      {isNext && "→ "}{sta?.name ?? hop.node_id}
-                    </td>
-                    <td style={{ textAlign: "right", color: theme.textSecondary, padding: "5px 0" }}>
-                      {fmtTime(entry.scheduled_arrival)}
-                    </td>
-                    <td style={{ textAlign: "right", color: theme.textPrimary, padding: "5px 0" }}>
-                      {fmtTime(entry.expected_arrival ?? entry.scheduled_arrival)}
-                    </td>
-                    <td style={{ textAlign: "right", padding: "5px 0" }}>
-                      <DelayBadge mins={delay} />
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        )}
+      {/* Tab bar */}
+      <div style={{ display: "flex", borderBottom: `1px solid ${theme.border}`, flexShrink: 0 }}>
+        {(["schedule", "history"] as const).map((tab) => (
+          <button
+            key={tab}
+            onClick={() => setActiveTab(tab)}
+            style={{
+              flex:         1,
+              background:   activeTab === tab ? theme.accent + "22" : "none",
+              border:       "none",
+              borderBottom: activeTab === tab ? `2px solid ${theme.accent}` : "2px solid transparent",
+              color:        activeTab === tab ? theme.accent : theme.textSecondary,
+              cursor:       "pointer",
+              fontSize:     11,
+              fontWeight:   700,
+              padding:      "8px 0",
+              textTransform:"capitalize",
+              transition:   "all 0.12s",
+            }}
+          >
+            {tab === "schedule" ? "📋 Schedule" : "📊 History"}
+          </button>
+        ))}
       </div>
 
-      {/* Event history */}
-      {trainEvents.length > 0 && (
-        <div style={{ padding: "14px 16px", borderTop: `1px solid ${theme.border}`, flexShrink: 0 }}>
-          <span style={headingStyle}>Recent Events</span>
-          <ul style={{ listStyle: "none", margin: 0, padding: 0, fontSize: 11 }}>
-            {trainEvents.map((ev, i) => (
-              <li key={i} style={{ display: "flex", gap: 6, marginBottom: 5, color: theme.textSecondary }}>
-                <span style={{ color: theme.textMuted, flexShrink: 0 }}>
-                  {fmtTime(ev.timestamp)}
-                </span>
-                <span style={{ color: theme.textSecondary }}>
-                  <span style={{ color: theme.textPrimary, fontWeight: 600 }}>
-                    {ev.event_type.replace(/_/g, " ")}
-                  </span>
-                  {ev.node_id && ` @ ${stationMap[ev.node_id]?.name ?? ev.node_id}`}
-                  {ev.detail && ` — ${ev.detail}`}
-                </span>
-              </li>
-            ))}
-          </ul>
+      {/* Schedule tab content */}
+      {activeTab === "schedule" && (
+        <>
+          {/* Upcoming stops */}
+          <div style={{ padding: "14px 16px 0", flex: 1, minHeight: 0 }}>
+            <span style={headingStyle}>Upcoming Stops</span>
+
+            {upcomingStops.length === 0 ? (
+              <p style={{ color: theme.textMuted, fontSize: 12, marginTop: 4 }}>
+                No upcoming stops.
+              </p>
+            ) : (
+              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11 }}>
+                <thead>
+                  <tr style={{ color: theme.textSecondary }}>
+                    <th style={{ textAlign: "left", paddingBottom: 6, fontWeight: 600 }}>Station</th>
+                    <th style={{ textAlign: "right", paddingBottom: 6, fontWeight: 600 }}>Sched.</th>
+                    <th style={{ textAlign: "right", paddingBottom: 6, fontWeight: 600 }}>ETA</th>
+                    <th style={{ textAlign: "right", paddingBottom: 6, fontWeight: 600 }}>Delay</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {upcomingStops.map((hop) => {
+                    const entry = train.schedule[hop.node_id]!;
+                    const sta   = stationMap[hop.node_id];
+                    const delay = delayMins(entry.expected_arrival, entry.scheduled_arrival);
+                    const isNext = upcomingStops[0]?.node_id === hop.node_id;
+                    return (
+                      <tr
+                        key={hop.node_id}
+                        style={{
+                          borderTop:  `1px solid ${theme.border}`,
+                          background: isNext ? `${theme.accent}15` : "transparent",
+                        }}
+                      >
+                        <td style={{ padding: "5px 0", color: isNext ? theme.accent : theme.textPrimary, fontWeight: isNext ? 600 : 400 }}>
+                          {isNext && "→ "}{sta?.name ?? hop.node_id}
+                        </td>
+                        <td style={{ textAlign: "right", color: theme.textSecondary, padding: "5px 0" }}>
+                          {fmtTime(entry.scheduled_arrival)}
+                        </td>
+                        <td style={{ textAlign: "right", color: theme.textPrimary, padding: "5px 0" }}>
+                          {fmtTime(entry.expected_arrival ?? entry.scheduled_arrival)}
+                        </td>
+                        <td style={{ textAlign: "right", padding: "5px 0" }}>
+                          <DelayBadge mins={delay} />
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            )}
+          </div>
+
+          {/* Event history */}
+          {trainEvents.length > 0 && (
+            <div style={{ padding: "14px 16px", borderTop: `1px solid ${theme.border}`, flexShrink: 0 }}>
+              <span style={headingStyle}>Recent Events</span>
+              <ul style={{ listStyle: "none", margin: 0, padding: 0, fontSize: 11 }}>
+                {trainEvents.map((ev, i) => (
+                  <li key={i} style={{ display: "flex", gap: 6, marginBottom: 5, color: theme.textSecondary }}>
+                    <span style={{ color: theme.textMuted, flexShrink: 0 }}>
+                      {fmtTime(ev.timestamp)}
+                    </span>
+                    <span style={{ color: theme.textSecondary }}>
+                      <span style={{ color: theme.textPrimary, fontWeight: 600 }}>
+                        {ev.event_type.replace(/_/g, " ")}
+                      </span>
+                      {ev.node_id && ` @ ${stationMap[ev.node_id]?.name ?? ev.node_id}`}
+                      {ev.detail && ` — ${ev.detail}`}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </>
+      )}
+
+      {/* History tab content */}
+      {activeTab === "history" && (
+        <div style={{ padding: "12px 16px", flex: 1, overflowY: "auto" }}>
+          <HistoryView
+            layoutName={layoutName}
+            trainId={train.id}
+            trainName={train.name}
+            runSeconds={3600}
+          />
         </div>
       )}
 

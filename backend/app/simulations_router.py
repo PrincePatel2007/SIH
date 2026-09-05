@@ -329,3 +329,140 @@ async def load_simulation(
         raise HTTPException(
             status_code=500, detail=f"Failed to parse saved layout: {exc}"
         )
+
+
+# ---------------------------------------------------------------------------
+# History endpoint
+# ---------------------------------------------------------------------------
+
+class StopHistoryEntry(BaseModel):
+    """One row in the per-train stop history table."""
+    node_id:            str
+    node_name:          str
+    scheduled_arrival:  Optional[str] = None
+    scheduled_departure:Optional[str] = None
+    actual_arrival:     Optional[str] = None
+    delay_seconds:      Optional[float] = None  # positive = late, negative = early
+    events:             list[str] = Field(default_factory=list)  # event_type strings
+
+
+class TrainHistoryResponse(BaseModel):
+    train_id:    str
+    train_name:  str
+    status:      str
+    stops:       list[StopHistoryEntry]
+    raw_events:  list[dict]   # all event_log entries for this train (for debugging)
+
+
+@router.get("/{name}/history/{train_id}", response_model=TrainHistoryResponse)
+async def get_train_history(
+    name:     str = Path(pattern=r"^[a-zA-Z0-9_\-]{1,80}$"),
+    train_id: str = Path(pattern=r"^[a-zA-Z0-9_\-]{1,80}$"),
+    run_seconds: float = 1800.0,   # how many sim-seconds to run headless (default 30 min)
+    tick_size:   float = 5.0,      # sim-seconds per tick
+) -> TrainHistoryResponse:
+    """
+    Run the named layout headless for *run_seconds* of simulated time and
+    return the scheduled-vs-actual stop log for *train_id*.
+
+    Query params:
+      run_seconds  — simulated seconds to advance (default 1800 = 30 sim-min)
+      tick_size    — simulation tick granularity in sim-seconds (default 5 s)
+
+    Returns a per-stop table with scheduled arrival, actual arrival, delay,
+    and the events that fired at each stop, plus the raw filtered event log.
+
+    Notes:
+    - This runs a *fresh* engine from the beginning every time — it does not
+      resume or share state with the live WebSocket simulation.
+    - It imports _build_engine_from_payload from main.py to avoid duplication.
+    """
+    from app.main import _build_engine_from_payload, _parse_dt, _iso
+
+    # Load layout.
+    src = SIMULATIONS_DIR / f"{name}.json"
+    if not src.exists():
+        raise HTTPException(status_code=404, detail=f"Simulation {name!r} not found.")
+    try:
+        payload = LayoutPayload(**json.loads(src.read_text(encoding="utf-8")))
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Failed to parse layout: {exc}")
+
+    # Find the requested train.
+    train_model = next((t for t in payload.trains if t.id == train_id), None)
+    if train_model is None:
+        raise HTTPException(status_code=404, detail=f"Train {train_id!r} not in layout {name!r}.")
+
+    # Build and run the engine.
+    try:
+        engine = _build_engine_from_payload(payload)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Engine build failed: {exc}")
+
+    engine.play()
+    engine.run_headless(duration_sim_seconds=run_seconds, tick_size=tick_size)
+
+    # Build a name lookup map (node_id → display name).
+    node_names: dict[str, str] = {}
+    for sta in payload.stations:
+        node_names[sta.id] = sta.name
+    for jct in payload.junctions:
+        node_names[jct.id] = f"Junction ({jct.id[-6:]})"
+
+    # Filter event log to this train.
+    train_events = [e for e in engine.event_log if e["train_id"] == train_id]
+
+    # Build per-stop rows from the route + schedule.
+    stops: list[StopHistoryEntry] = []
+
+    # Find the engine's TrainRuntime to get the final schedule state.
+    ts = engine._train_states.get(train_id)
+    if ts is None:
+        raise HTTPException(status_code=404, detail=f"Train {train_id!r} was not registered in the engine.")
+
+    train_rt = ts.train
+    route = train_rt.route
+
+    for hop in route:
+        nid = hop.node_id
+        entry = train_rt.schedule.get(nid)
+        if entry is None:
+            continue
+
+        sched_arr  = _iso(entry.scheduled_arrival)
+        sched_dep  = _iso(entry.scheduled_departure)
+        actual_arr = _iso(entry.actual_arrival)
+
+        delay: Optional[float] = None
+        if entry.scheduled_arrival and entry.actual_arrival:
+            sa = _parse_dt(entry.scheduled_arrival)
+            aa = _parse_dt(entry.actual_arrival)
+            if sa and aa:
+                delay = (aa - sa).total_seconds()
+
+        # Collect events at this node.
+        stop_events = [
+            e["event_type"] for e in train_events
+            if e.get("node_id") == nid
+        ]
+
+        stops.append(StopHistoryEntry(
+            node_id=nid,
+            node_name=node_names.get(nid, nid),
+            scheduled_arrival=sched_arr,
+            scheduled_departure=sched_dep,
+            actual_arrival=actual_arr,
+            delay_seconds=delay,
+            events=stop_events,
+        ))
+
+    # Determine final status.
+    final_status = ts.status.value
+
+    return TrainHistoryResponse(
+        train_id=train_id,
+        train_name=train_model.name,
+        status=final_status,
+        stops=stops,
+        raw_events=train_events,
+    )
