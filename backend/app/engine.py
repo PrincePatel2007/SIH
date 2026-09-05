@@ -47,6 +47,7 @@ from app.arbitration import (
     ArbitrationRegistry,
     SignalAspect,
     SignalViolationError,
+    aspect_to_signal_state_value,
     compute_signal_aspect,
     propagate_eta_update,
     try_advance,
@@ -486,6 +487,12 @@ class SimulationEngine:
                 network=self.network,
                 granted_to_train_id=granted_to,
             )
+            # Persist the live aspect into the SignalState record so that
+            # to_dict() reflects what is actually being enforced right now.
+            if approaching_junction_id is not None:
+                self._persist_signal_aspect(
+                    approaching_junction_id, current_blk.segment_id, aspect
+                )
         else:
             aspect = SignalAspect.GREEN  # Final block — let the train finish.
 
@@ -514,7 +521,6 @@ class SimulationEngine:
                       detail=f"Held at RED signal approaching {next_block_ids[0] if next_block_ids else '?'!r}.")
             train.update_position(current_blk_id, state.position_in_block)
             return
-
         if state.current_speed_kmh <= 0.0:
             train.update_position(current_blk_id, state.position_in_block)
             return
@@ -588,6 +594,10 @@ class SimulationEngine:
                     block_id=next_blk_id,
                     detail=f"No grant at junction {approaching_junction_id!r}; held.",
                 )
+                # Persist RED: this train is being held at a junction signal.
+                self._persist_signal_aspect(
+                    approaching_junction_id, current_blk.segment_id, SignalAspect.RED
+                )
                 train.update_position(current_blk.id, state.position_in_block)
                 return
 
@@ -618,6 +628,10 @@ class SimulationEngine:
             arbiter = self.registry.get_arbiter(approaching_junction_id)
             if arbiter is not None:
                 arbiter.clear_grant(train.id)
+            # Signal clears to GREEN now that this train has physically passed.
+            self._persist_signal_aspect(
+                approaching_junction_id, current_blk.segment_id, SignalAspect.GREEN
+            )
             # Occupy the junction (atomic).
             jct_node = self.network._junctions.get(approaching_junction_id)
             if jct_node is not None and jct_node.is_free:
@@ -772,6 +786,67 @@ class SimulationEngine:
         if shared_node in self.network._junctions:
             return shared_node
         return None
+
+    def _persist_signal_aspect(
+        self,
+        junction_id: str,
+        approach_segment_id: str,
+        aspect: SignalAspect,
+    ) -> None:
+        """
+        Convert *aspect* to a SignalStateValue and write it into the SignalState
+        record registered for *approach_segment_id* at *junction_id*.
+
+        Emits a WARNING log (never raises) on each wiring-gap path so that
+        missing signal registrations surface in logs instead of disappearing
+        silently into the tick loop.  Three distinct gaps are detected:
+          1. junction_id unknown to the network graph.
+          2. Approach segment not registered in Junction.signal_states
+             (register_junction_signals() was not called, or the segment was
+             added after signal setup).
+          3. signal_id recorded in Junction.signal_states but absent from
+             NetworkGraph._signals (stale reference after a graph mutation).
+        """
+        try:
+            jct = self.network.get_junction(junction_id)
+        except NetworkError:
+            logger.warning(
+                "persist_signal_aspect: junction %r not found in network graph "
+                "(approach_segment=%r, aspect=%s). Signal state NOT updated. "
+                "Check that the junction was added via NetworkGraph.add_junction().",
+                junction_id,
+                approach_segment_id,
+                aspect.value,
+            )
+            return
+
+        sig_id = jct.get_signal(approach_segment_id)
+        if sig_id is None:
+            logger.warning(
+                "persist_signal_aspect: no SignalState registered for approach "
+                "segment %r at junction %r (aspect=%s). Signal state NOT updated. "
+                "Call NetworkGraph.register_junction_signals() after building the "
+                "network topology to auto-populate all approach signals.",
+                approach_segment_id,
+                junction_id,
+                aspect.value,
+            )
+            return
+
+        sv = aspect_to_signal_state_value(aspect)
+        try:
+            self.network.set_signal_state(sig_id, sv)
+        except NetworkError:
+            logger.warning(
+                "persist_signal_aspect: signal_id %r (registered for approach "
+                "segment %r at junction %r) not found in NetworkGraph._signals "
+                "(aspect=%s). Stale reference — was the signal removed after "
+                "register_junction_signals() was called?",
+                sig_id,
+                approach_segment_id,
+                junction_id,
+                aspect.value,
+            )
 
     # -----------------------------------------------------------------------
     # Siding overtake logic

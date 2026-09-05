@@ -529,6 +529,43 @@ class NetworkGraph:
             blocks.append(rt)
         return blocks
 
+    def _ensure_junction_signal(
+        self, junction: JunctionRuntime, segment_id: str
+    ) -> None:
+        """
+        Create a SignalState for *segment_id* approaching *junction* if one
+        does not already exist, then register it into both NetworkGraph._signals
+        and Junction.signal_states.
+
+        Called internally whenever a segment is wired to a junction so that
+        _signals is populated automatically as the network is built.
+        Idempotent — re-calling for an already-registered approach is a no-op.
+        """
+        if junction.get_signal(segment_id) is not None:
+            return  # Already registered.
+        try:
+            seg = self.get_segment(segment_id)
+        except NetworkError:
+            return
+        if not seg.ordered_block_ids:
+            return
+        # The block adjacent to this junction:
+        # if the junction is the *end* node the train exits towards the junction
+        # through the last block; if it is the *start* node, through the first.
+        if seg.end_node_id == junction.id:
+            adj_block_id = seg.ordered_block_ids[-1]
+        else:
+            adj_block_id = seg.ordered_block_ids[0]
+        sig_id = f"sig-{junction.id}-{segment_id}"
+        signal = SignalState(
+            id=sig_id,
+            block_id=adj_block_id,
+            state=SignalStateValue.GREEN,
+            controlled_by_junction_id=junction.id,
+        )
+        self.add_signal(signal)
+        junction.set_signal(segment_id, sig_id)
+
     # -----------------------------------------------------------------------
     # Public read accessors
     # -----------------------------------------------------------------------
@@ -715,11 +752,15 @@ class NetworkGraph:
         # Wire connectivity.
         self._link_nodes(start_node_id, end_node_id, seg_id)
 
-        # Let junctions know about this segment.
+        # Let junctions know about this segment and create approach signals.
         if start_node_id in self._junctions:
-            self._junctions[start_node_id].connect_segment(seg_id)
+            jct = self._junctions[start_node_id]
+            jct.connect_segment(seg_id)
+            self._ensure_junction_signal(jct, seg_id)
         if end_node_id in self._junctions:
-            self._junctions[end_node_id].connect_segment(seg_id)
+            jct = self._junctions[end_node_id]
+            jct.connect_segment(seg_id)
+            self._ensure_junction_signal(jct, seg_id)
 
         # Let stations record the track.
         if start_node_id in self._stations:
@@ -770,11 +811,13 @@ class NetworkGraph:
         self._link_nodes(seg_a.start_node_id, seg_a.end_node_id, seg_a.id)
         self._link_nodes(seg_b.start_node_id, seg_b.end_node_id, seg_b.id)
 
-        # Register with junctions.
+        # Register with junctions and ensure approach signals exist.
         if via_node_id in self._junctions:
             jct = self._junctions[via_node_id]
             jct.connect_segment(seg_a.id)
             jct.connect_segment(seg_b.id)
+            self._ensure_junction_signal(jct, seg_a.id)
+            self._ensure_junction_signal(jct, seg_b.id)
 
     # -----------------------------------------------------------------------
     # split_track_at_point — insert a node mid-track
@@ -903,7 +946,9 @@ class NetworkGraph:
             (original_end, r_seg_id),
         ]:
             if node_id in self._junctions:
-                self._junctions[node_id].connect_segment(seg_id)
+                jct = self._junctions[node_id]
+                jct.connect_segment(seg_id)
+                self._ensure_junction_signal(jct, seg_id)
             elif node_id in self._stations:
                 # station tracks are the visual tracks, not segment ids
                 pass
@@ -1092,6 +1137,23 @@ class NetworkGraph:
         if sig is None:
             raise NetworkError(f"Signal {signal_id!r} not found.")
         sig.state = state
+
+    def register_junction_signals(self) -> None:
+        """
+        Idempotently create SignalState records for every approach segment at
+        every junction in the network.
+
+        For networks built via add_track() / connect_tracks() /
+        split_track_at_point() the signals are created automatically during
+        construction.  Call this method as a catch-all after loading a network
+        from serialised data (e.g. a DB snapshot or JSON fixture) to ensure
+        _signals is fully populated before the engine starts.
+
+        Safe to call multiple times — already-registered approaches are skipped.
+        """
+        for jct in self._junctions.values():
+            for seg_id in list(jct.connected_segment_ids):
+                self._ensure_junction_signal(jct, seg_id)
 
     # -----------------------------------------------------------------------
     # Serialisation helpers
