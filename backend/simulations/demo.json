@@ -1,0 +1,298 @@
+{
+  "tracks": [
+    {
+      "id": "trk-1",
+      "segment_id": "seg-AB",
+      "geometry": [
+        {
+          "x": 100.0,
+          "y": 300.0
+        },
+        {
+          "x": 200.0,
+          "y": 290.0
+        },
+        {
+          "x": 300.0,
+          "y": 305.0
+        },
+        {
+          "x": 400.0,
+          "y": 300.0
+        }
+      ],
+      "directionality": "bidirectional",
+      "restricted_to_priority": null
+    },
+    {
+      "id": "trk-2",
+      "segment_id": "seg-XB",
+      "geometry": [
+        {
+          "x": 400.0,
+          "y": 300.0
+        },
+        {
+          "x": 550.0,
+          "y": 295.0
+        },
+        {
+          "x": 700.0,
+          "y": 300.0
+        }
+      ],
+      "directionality": "bidirectional",
+      "restricted_to_priority": null
+    },
+    {
+      "id": "trk-3",
+      "segment_id": "seg-branch",
+      "geometry": [
+        {
+          "x": 400.0,
+          "y": 300.0
+        },
+        {
+          "x": 400.0,
+          "y": 200.0
+        },
+        {
+          "x": 400.0,
+          "y": 100.0
+        }
+      ],
+      "directionality": "one_way_forward",
+      "restricted_to_priority": null
+    }
+  ],
+  "segments": [
+    {
+      "id": "seg-AB",
+      "start_node_id": "sta-A",
+      "end_node_id": "jct-X",
+      "ordered_block_ids": [
+        "blk-AB-0",
+        "blk-AB-1",
+        "blk-AB-2"
+      ]
+    },
+    {
+      "id": "seg-XB",
+      "start_node_id": "jct-X",
+      "end_node_id": "sta-B",
+      "ordered_block_ids": [
+        "blk-XB-0",
+        "blk-XB-1"
+      ]
+    },
+    {
+      "id": "seg-branch",
+      "start_node_id": "jct-X",
+      "end_node_id": "sta-C",
+      "ordered_block_ids": [
+        "blk-br-0",
+        "blk-br-1"
+      ]
+    }
+  ],
+  "stations": [
+    {
+      "id": "sta-A",
+      "name": "Alpha",
+      "platform_tracks": [
+        "trk-1"
+      ],
+      "rotation_deg": 0.0,
+      "station_type": "terminus"
+    },
+    {
+      "id": "sta-B",
+      "name": "Beta",
+      "platform_tracks": [
+        "trk-2"
+      ],
+      "rotation_deg": 0.0,
+      "station_type": "terminus"
+    },
+    {
+      "id": "sta-C",
+      "name": "Gamma",
+      "platform_tracks": [
+        "trk-3"
+      ],
+      "rotation_deg": 0.0,
+      "station_type": "junction_station"
+    }
+  ],
+  "junctions": [
+    {
+      "id": "jct-X",
+      "connected_segment_ids": [
+        "seg-AB",
+        "seg-XB",
+        "seg-branch"
+      ],
+      "signal_states": {}
+    }
+  ],
+  "signals": [
+    {
+      "id": "sig-1",
+      "block_id": "blk-AB-0",
+      "state": "green",
+      "controlled_by_junction_id": "jct-X"
+    },
+    {
+      "id": "sig-2",
+      "block_id": "blk-XB-0",
+      "state": "caution",
+      "controlled_by_junction_id": "jct-X"
+    },
+    {
+      "id": "sig-3",
+      "block_id": "blk-br-0",
+      "state": "red",
+      "controlled_by_junction_id": "jct-X"
+    }
+  ],
+  "trains": [
+    {
+      "id": "train-001",
+      "name": "Express 1",
+      "color": "#6366f1",
+      "priority": 1,
+      "num_carriages": 8,
+      "max_speed": 160.0,
+      "avg_speed": 120.0,
+      "route": [
+        {
+          "node_id": "sta-A",
+          "segment_id": null
+        },
+        {
+          "node_id": "jct-X",
+          "segment_id": "seg-AB"
+        },
+        {
+          "node_id": "sta-B",
+          "segment_id": "seg-XB"
+        }
+      ],
+      "schedule": {
+        "sta-A": {
+          "scheduled_arrival": null,
+          "scheduled_departure": "2026-09-05T14:58:51.426268Z",
+          "expected_arrival": null,
+          "actual_arrival": null
+        },
+        "jct-X": {
+          "scheduled_arrival": "2026-09-05T15:05:21.426268Z",
+          "scheduled_departure": "2026-09-05T15:05:21.426268Z",
+          "expected_arrival": null,
+          "actual_arrival": null
+        },
+        "sta-B": {
+          "scheduled_arrival": "2026-09-05T15:11:21.426268Z",
+          "scheduled_departure": "2026-09-05T15:11:21.426268Z",
+          "expected_arrival": null,
+          "actual_arrival": null
+        }
+      },
+      "driver_duty_status": "normal",
+      "current_block_id": null,
+      "current_position_in_block": 0.0
+    },
+    {
+      "id": "train-002",
+      "name": "Local 2",
+      "color": "#f59e0b",
+      "priority": 3,
+      "num_carriages": 4,
+      "max_speed": 100.0,
+      "avg_speed": 80.0,
+      "route": [
+        {
+          "node_id": "sta-B",
+          "segment_id": null
+        },
+        {
+          "node_id": "jct-X",
+          "segment_id": "seg-XB"
+        },
+        {
+          "node_id": "sta-A",
+          "segment_id": "seg-AB"
+        }
+      ],
+      "schedule": {
+        "sta-B": {
+          "scheduled_arrival": null,
+          "scheduled_departure": "2026-09-05T14:58:51.426268Z",
+          "expected_arrival": null,
+          "actual_arrival": null
+        },
+        "jct-X": {
+          "scheduled_arrival": "2026-09-05T15:05:21.426268Z",
+          "scheduled_departure": "2026-09-05T15:05:21.426268Z",
+          "expected_arrival": null,
+          "actual_arrival": null
+        },
+        "sta-A": {
+          "scheduled_arrival": "2026-09-05T15:12:36.426268Z",
+          "scheduled_departure": "2026-09-05T15:12:36.426268Z",
+          "expected_arrival": null,
+          "actual_arrival": null
+        }
+      },
+      "driver_duty_status": "normal",
+      "current_block_id": null,
+      "current_position_in_block": 0.0
+    }
+  ],
+  "authoring_hints": [],
+  "segment_overrides": [],
+  "station_positions": {
+    "sta-A": {
+      "x": 100,
+      "y": 300
+    },
+    "sta-B": {
+      "x": 700,
+      "y": 300
+    },
+    "sta-C": {
+      "x": 400,
+      "y": 100
+    }
+  },
+  "junction_positions": {
+    "jct-X": {
+      "x": 400,
+      "y": 300
+    }
+  },
+  "signal_positions": {
+    "sig-1": {
+      "x": 130,
+      "y": 280
+    },
+    "sig-2": {
+      "x": 430,
+      "y": 280
+    },
+    "sig-3": {
+      "x": 400,
+      "y": 270
+    }
+  },
+  "train_positions": {
+    "train-001": {
+      "x": 100,
+      "y": 300
+    },
+    "train-002": {
+      "x": 700,
+      "y": 300
+    }
+  }
+}

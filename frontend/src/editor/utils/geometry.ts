@@ -185,3 +185,85 @@ export function normaliseRect(x1: number, y1: number, x2: number, y2: number): R
     h: Math.abs(y2 - y1),
   };
 }
+
+// ---------------------------------------------------------------------------
+// Arc-length interpolation along a polyline/spline
+// ---------------------------------------------------------------------------
+
+/**
+ * Sample a point at arc-length fraction t ∈ [0, 1] along a polyline.
+ *
+ * Walks the polyline segment-by-segment, accumulating length, and returns
+ * the point at the proportional distance t × totalLength.
+ *
+ * This is the function used to map `current_position_in_block` → canvas pixel.
+ * It deliberately walks the actual geometry, NOT a straight chord between the
+ * block's two endpoints.  For a multi-point (curved) track, the result lies ON
+ * the polyline, not on the straight-line between start and end.
+ *
+ * For smoother curves you can first call catmullRomToBezier + evalCubicBezier
+ * to densify the point list, then pass those denser points here.
+ *
+ * @param pts   Ordered geometry points (Track.geometry or a sub-slice of it).
+ * @param t     Arc-length fraction in [0, 1].  0 = start of pts, 1 = end.
+ * @returns     The interpolated Point.
+ */
+export function samplePolyline(pts: Point[], t: number): Point {
+  if (pts.length === 0) return { x: 0, y: 0 };
+  if (pts.length === 1) return pts[0];
+  // Clamp t.
+  t = Math.max(0, Math.min(1, t));
+  if (t === 0) return pts[0];
+  if (t === 1) return pts[pts.length - 1];
+
+  // Compute cumulative arc lengths.
+  const lengths: number[] = [0];
+  for (let i = 1; i < pts.length; i++) {
+    const dx = pts[i].x - pts[i - 1].x;
+    const dy = pts[i].y - pts[i - 1].y;
+    lengths.push(lengths[i - 1] + Math.sqrt(dx * dx + dy * dy));
+  }
+  const total = lengths[lengths.length - 1];
+  if (total === 0) return pts[0];
+
+  const target = t * total;
+
+  // Binary search for the segment containing `target`.
+  let lo = 0;
+  let hi = lengths.length - 1;
+  while (hi - lo > 1) {
+    const mid = (lo + hi) >> 1;
+    if (lengths[mid] <= target) lo = mid;
+    else hi = mid;
+  }
+
+  const segLen = lengths[hi] - lengths[lo];
+  const localT = segLen === 0 ? 0 : (target - lengths[lo]) / segLen;
+  return {
+    x: pts[lo].x + localT * (pts[hi].x - pts[lo].x),
+    y: pts[lo].y + localT * (pts[hi].y - pts[lo].y),
+  };
+}
+
+/**
+ * Densify a point list via Catmull-Rom evaluation so that samplePolyline()
+ * follows the smooth spline rather than the raw polyline segments.
+ *
+ * Evaluates `stepsPerSegment` Bézier samples per geometry segment and returns
+ * a densified list for use in samplePolyline().
+ *
+ * @param pts              Original geometry points.
+ * @param stepsPerSegment  Samples per bezier segment (default 20 — smooth enough).
+ */
+export function densifySpline(pts: Point[], stepsPerSegment = 20): Point[] {
+  const segs = catmullRomToBezier(pts);
+  if (segs.length === 0) return pts;
+  const dense: Point[] = [];
+  for (const [p0, cp1, cp2, p1] of segs) {
+    for (let i = 0; i <= stepsPerSegment; i++) {
+      dense.push(evalCubicBezier(p0, cp1, cp2, p1, i / stepsPerSegment));
+    }
+  }
+  return dense;
+}
+
