@@ -1,107 +1,14 @@
 {
-  "tracks": [
-    {
-      "id": "trk-5bbbef43-2110-4ae0-bbbf-a0c3e97e882b",
-      "segment_id": "seg-f805a642-a1f8-4aad-a9c8-429f05c9a81d",
-      "geometry": [
-        {
-          "x": 384.0,
-          "y": 105.0
-        },
-        {
-          "x": 896.0,
-          "y": 105.0
-        }
-      ],
-      "directionality": "bidirectional",
-      "restricted_to_priority": null
-    },
-    {
-      "id": "trk-029f350e-21aa-41f0-b7dd-5d9c89303340",
-      "segment_id": "seg-90450868-25a5-492f-b131-5f1d887eb5f2",
-      "geometry": [
-        {
-          "x": 384.0,
-          "y": 105.0
-        },
-        {
-          "x": 896.0,
-          "y": 105.0
-        }
-      ],
-      "directionality": "bidirectional",
-      "restricted_to_priority": null
-    }
-  ],
-  "segments": [
-    {
-      "id": "seg-f805a642-a1f8-4aad-a9c8-429f05c9a81d",
-      "start_node_id": "",
-      "end_node_id": "",
-      "ordered_block_ids": []
-    },
-    {
-      "id": "seg-90450868-25a5-492f-b131-5f1d887eb5f2",
-      "start_node_id": "",
-      "end_node_id": "",
-      "ordered_block_ids": []
-    }
-  ],
-  "stations": [
-    {
-      "id": "sta-e9f940df-eb6a-435a-a6a8-8f5caa1a210c",
-      "name": "Station 210c",
-      "platform_tracks": [],
-      "rotation_deg": 0.0,
-      "station_type": "through"
-    },
-    {
-      "id": "sta-07cb6aa8-1c2c-486f-b3d8-8b2baef32072",
-      "name": "Station 2072",
-      "platform_tracks": [],
-      "rotation_deg": 0.0,
-      "station_type": "through"
-    }
-  ],
-  "junctions": [
-    {
-      "id": "jct-63630ddc-e93a-45af-9555-417c17ad9012",
-      "connected_segment_ids": [],
-      "signal_states": {}
-    }
-  ],
-  "signals": [
-    {
-      "id": "sig-37a92f30-0501-41d9-b633-f8df6c75f74d",
-      "block_id": "block-at-448-72",
-      "state": "green",
-      "controlled_by_junction_id": null
-    }
-  ],
+  "tracks": [],
+  "segments": [],
+  "stations": [],
+  "junctions": [],
+  "signals": [],
   "trains": [],
   "authoring_hints": [],
   "segment_overrides": [],
-  "station_positions": {
-    "sta-e9f940df-eb6a-435a-a6a8-8f5caa1a210c": {
-      "x": 384,
-      "y": 72
-    },
-    "sta-07cb6aa8-1c2c-486f-b3d8-8b2baef32072": {
-      "x": 768,
-      "y": 72
-    }
-  },
-  "junction_positions": {
-    "jct-63630ddc-e93a-45af-9555-417c17ad9012": {
-      "x": 576,
-      "y": 72
-    }
-  },
-  "signal_positions": {
-    "sig-37a92f30-0501-41d9-b633-f8df6c75f74d": {
-      "x": 448,
-      "y": 72
-    }
-  },
+  "station_positions": {},
+  "junction_positions": {},
+  "signal_positions": {},
   "train_positions": {}
 }

@@ -260,13 +260,14 @@ def _build_tick_snapshot(engine: SimulationEngine) -> dict:
         })
 
     return {
-        "sim_clock": engine.sim_clock.isoformat(),
-        "playing": engine._playing,
+        "sim_clock":        engine.sim_clock.isoformat(),
+        "playing":          engine._playing,
         "speed_multiplier": engine.speed_multiplier,
-        "trains": trains_out,
-        "blocks": blocks_out,
-        "signals": signals_out,
-        "weather_cells": weather_out,
+        "trains":           trains_out,
+        "blocks":           blocks_out,
+        "signals":          signals_out,
+        "weather_cells":    weather_out,
+        "event_log":        engine.event_log[-30:],   # last 30 events for SidePanel history
     }
 
 

@@ -149,13 +149,7 @@ export default function PropertyPanel() {
   if (selection.size > 1) {
     return (
       <aside style={panel} id="property-panel" aria-label="Property Panel">
-        <div style={{ padding: 16 }}>
-          <h2 style={h2}>Multiple selected</h2>
-          <span style={badge}>{selection.size} elements</span>
-          <p style={{ color: "#64748b", fontSize: 12 }}>
-            Select a single element to edit its properties.
-          </p>
-        </div>
+        <BulkEditPanel />
       </aside>
     );
   }
@@ -538,4 +532,201 @@ function NodeName({ nodeId, state }: { nodeId: string; state: ReturnType<typeof 
   const jct = state.junctions.find((j) => j.id === nodeId);
   if (jct) return <>Junction {jct.id.slice(-4)}</>;
   return <>{nodeId.slice(-6)}</>;
+}
+
+// ---------------------------------------------------------------------------
+// BulkEditPanel — shown when multiple elements are marquee-selected
+//
+// Algorithm:
+//  1. Determine which type(s) are in the selection.
+//  2. If all selected elements are the SAME type → show common fields editable.
+//  3. If mixed types → show a friendly "same type required" message.
+//  4. Each field change dispatches once per selected ID.
+// ---------------------------------------------------------------------------
+
+function BulkEditPanel() {
+  const { state, dispatch } = useEditorStore();
+  const { selection } = state;
+  const ids = [...selection];
+
+  // Classify each selected id
+  const types = ids.map((id) => {
+    if (state.tracks.find((t) => t.id === id))    return "track";
+    if (state.stations.find((s) => s.id === id))  return "station";
+    if (state.junctions.find((j) => j.id === id)) return "junction";
+    if (state.signals.find((s) => s.id === id))   return "signal";
+    if (state.trains.find((t) => t.id === id))    return "train";
+    return "unknown";
+  });
+
+  const uniqueTypes = [...new Set(types)];
+  const commonType  = uniqueTypes.length === 1 ? uniqueTypes[0] : null;
+
+  const hdr: CSSProperties = { ...h2, marginBottom: 8 };
+
+  return (
+    <div style={{ padding: 16 }}>
+      <h2 style={hdr}>Bulk Edit</h2>
+      <span style={badge}>{ids.length} elements selected</span>
+
+      {/* Mixed types */}
+      {!commonType && (
+        <p style={{ color: "#64748b", fontSize: 12, marginTop: 12 }}>
+          Mixed element types selected ({uniqueTypes.join(", ")}).
+          <br />Marquee-select only tracks, only stations, or only trains to bulk-edit shared fields.
+        </p>
+      )}
+
+      {/* ── Bulk: Tracks ────────────────────────────────────────────── */}
+      {commonType === "track" && (() => {
+        const tracks = ids.map((id) => state.tracks.find((t) => t.id === id)!).filter(Boolean);
+        // Common directionality (shown if all same; otherwise show blank)
+        const dirs = [...new Set(tracks.map((t) => t.directionality))];
+        const commonDir = dirs.length === 1 ? dirs[0] : "";
+        const pris = [...new Set(tracks.map((t) => String(t.restricted_to_priority ?? "")))];
+        const commonPri = pris.length === 1 ? pris[0] : "";
+        return (
+          <>
+            <p style={{ color: "#64748b", fontSize: 11, marginTop: 8 }}>
+              Editing {tracks.length} tracks — only shared fields shown.
+            </p>
+
+            <label style={label} htmlFor="bulk-track-dir">Directionality</label>
+            <select id="bulk-track-dir" style={select}
+              value={commonDir}
+              onChange={(e) => {
+                tracks.forEach((t) =>
+                  dispatch({ type: "UPDATE_TRACK", id: t.id,
+                    patch: { directionality: e.target.value as TrackDirectionality } }));
+              }}>
+              {commonDir === "" && <option value="">(mixed — select to apply)</option>}
+              <option value="bidirectional">Bidirectional ↔</option>
+              <option value="one_way_forward">One-way → (forward)</option>
+              <option value="one_way_reverse">One-way ← (reverse)</option>
+            </select>
+
+            <label style={label} htmlFor="bulk-track-priority">Min priority tier</label>
+            <select id="bulk-track-priority" style={select}
+              value={commonPri}
+              onChange={(e) => {
+                const v = e.target.value;
+                const val: PriorityTier | null = v === "" ? null : (Number(v) as PriorityTier);
+                tracks.forEach((t) =>
+                  dispatch({ type: "UPDATE_TRACK", id: t.id,
+                    patch: { restricted_to_priority: val } }));
+              }}>
+              {commonPri === "" && <option value="">(mixed — select to apply)</option>}
+              <option value="">Unrestricted (all trains)</option>
+              <option value="1">1 — Express only</option>
+              <option value="2">2 — Ordinary + Express</option>
+              <option value="3">3 — All</option>
+            </select>
+          </>
+        );
+      })()}
+
+      {/* ── Bulk: Stations ──────────────────────────────────────────── */}
+      {commonType === "station" && (() => {
+        const stations = ids.map((id) => state.stations.find((s) => s.id === id)!).filter(Boolean);
+        const stTypes  = [...new Set(stations.map((s) => s.station_type))];
+        const commonSt = stTypes.length === 1 ? stTypes[0] : "";
+        return (
+          <>
+            <p style={{ color: "#64748b", fontSize: 11, marginTop: 8 }}>
+              Editing {stations.length} stations.
+            </p>
+            <label style={label} htmlFor="bulk-sta-type">Station type</label>
+            <select id="bulk-sta-type" style={select}
+              value={commonSt}
+              onChange={(e) => {
+                stations.forEach((s) =>
+                  dispatch({ type: "UPDATE_STATION", id: s.id,
+                    patch: { station_type: e.target.value as StationType } }));
+              }}>
+              {commonSt === "" && <option value="">(mixed — select to apply)</option>}
+              <option value="through">Through</option>
+              <option value="terminus">Terminus (dead-end)</option>
+              <option value="junction_station">Junction station</option>
+            </select>
+          </>
+        );
+      })()}
+
+      {/* ── Bulk: Signals ───────────────────────────────────────────── */}
+      {commonType === "signal" && (() => {
+        const signals = ids.map((id) => state.signals.find((s) => s.id === id)!).filter(Boolean);
+        const sts = [...new Set(signals.map((s) => s.state))];
+        const commonSt = sts.length === 1 ? sts[0] : "";
+        return (
+          <>
+            <p style={{ color: "#64748b", fontSize: 11, marginTop: 8 }}>
+              Editing {signals.length} signals.
+            </p>
+            <label style={label} htmlFor="bulk-sig-state">Signal state</label>
+            <select id="bulk-sig-state" style={select}
+              value={commonSt}
+              onChange={(e) => {
+                signals.forEach((s) =>
+                  dispatch({ type: "UPDATE_SIGNAL", id: s.id,
+                    patch: { state: e.target.value as SignalStateValue } }));
+              }}>
+              {commonSt === "" && <option value="">(mixed — select to apply)</option>}
+              <option value="green">🟢 Green — clear</option>
+              <option value="caution">🟡 Caution</option>
+              <option value="red">🔴 Red — stop</option>
+            </select>
+          </>
+        );
+      })()}
+
+      {/* ── Bulk: Trains ────────────────────────────────────────────── */}
+      {commonType === "train" && (() => {
+        const trains = ids.map((id) => state.trains.find((t) => t.id === id)!).filter(Boolean);
+        const pris = [...new Set(trains.map((t) => t.priority))];
+        const commonPri = pris.length === 1 ? String(pris[0]) : "";
+        const duties = [...new Set(trains.map((t) => t.driver_duty_status))];
+        const commonDuty = duties.length === 1 ? duties[0] : "";
+        return (
+          <>
+            <p style={{ color: "#64748b", fontSize: 11, marginTop: 8 }}>
+              Editing {trains.length} trains.
+            </p>
+            <label style={label} htmlFor="bulk-train-priority">Priority tier</label>
+            <select id="bulk-train-priority" style={select}
+              value={commonPri}
+              onChange={(e) => {
+                trains.forEach((t) =>
+                  dispatch({ type: "UPDATE_TRAIN", id: t.id,
+                    patch: { priority: Number(e.target.value) as PriorityTier } }));
+              }}>
+              {commonPri === "" && <option value="">(mixed — select to apply)</option>}
+              <option value="1">1 — Express</option>
+              <option value="2">2 — Ordinary</option>
+              <option value="3">3 — Local</option>
+            </select>
+
+            <label style={label} htmlFor="bulk-train-duty">Driver duty status</label>
+            <select id="bulk-train-duty" style={select}
+              value={commonDuty}
+              onChange={(e) => {
+                trains.forEach((t) =>
+                  dispatch({ type: "UPDATE_TRAIN", id: t.id,
+                    patch: { driver_duty_status: e.target.value as Train["driver_duty_status"] } }));
+              }}>
+              {commonDuty === "" && <option value="">(mixed — select to apply)</option>}
+              <option value="normal">Normal</option>
+              <option value="over_duty">Over duty (fatigued)</option>
+            </select>
+          </>
+        );
+      })()}
+
+      {/* Unknown / unsupported */}
+      {commonType === "unknown" && (
+        <p style={{ color: "#64748b", fontSize: 12, marginTop: 8 }}>
+          Unknown element type. Cannot bulk-edit.
+        </p>
+      )}
+    </div>
+  );
 }
