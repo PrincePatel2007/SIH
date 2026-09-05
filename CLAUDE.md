@@ -30,10 +30,19 @@ A train network ETA-prediction simulator with two user-facing modes:
   **Station**. A Junction has NO internal blocks — the whole junction is ONE atomic
   block for occupancy purposes, because trains can't safely split occupancy across a
   crossing point.
-- **Track** — the geometric/visual representation of a Segment's path (straight or
-  curved). A rendering concern layered on top of Block/Segment logic, NOT a separate
-  source of truth. Track geometry is derived FROM segment structure; occupancy truth
-  lives in Block only.
+- **Track** — the geometric/visual representation of a Segment's path, as an ordered
+  list of `Point`s (plain x/y — no bezier control points; curves are polylines/splines
+  through multiple points, not single-control-point beziers). A rendering concern
+  layered on top of Block/Segment logic, NOT a separate source of truth. Track geometry
+  is derived FROM segment structure; occupancy truth lives in Block only.
+- **Signal** — a per-Block record (`SignalState` model), not just a display-derived
+  value. Optionally governed by a Junction (`controlled_by_junction_id`), but can exist
+  autonomously on a plain block. `engine.py`'s `_persist_signal_aspect()` writes the live
+  aspect to the actual `SignalState` record on every advance/hold/clear — confirmed
+  working as of the post-Phase-5 signal-persistence fix (see Build status). If a signal
+  lookup ever fails (unregistered junction, missing approach signal, stale `signal_id`),
+  it logs a `WARNING` and no-ops rather than crashing the tick loop — check logs, not
+  just test failures, if signal data ever looks wrong downstream.
 - **Train** — has a priority tier (1=express > 2=ordinary > 3=local) and a
   `driver_duty_status` that can override numeric priority entirely (over-duty, or
   journeys ≥12h, get max priority regardless of tier).
@@ -66,9 +75,9 @@ conditions already changed them.
 |---|---|---|
 | `network.py` | Static graph: Blocks, Segments, Junctions, Stations, Tracks, pathfinding | Trains, time |
 | `train.py` | Train model, schedule feasibility (distance/speed/time physics) | Other trains, arbitration |
-| `arbitration.py` | Junction priority resolution + ETA-propagation chain | — (this is where network.py and train.py meet) |
+| `arbitration.py` | Junction priority resolution + ETA-propagation chain. Grant/deny decisions ultimately drive signal aspect (persisted by `engine.py`, not written here directly). | — (this is where network.py and train.py meet) |
 | `conditions.py` | Weather/speed-restriction/maintenance modifiers to effective speed & pathfinding availability | — |
-| `engine.py` | Sim clock, tick loop, event log. **The ONLY layer allowed to mutate Block occupancy.** | — |
+| `engine.py` | Sim clock, tick loop, event log, **and `_persist_signal_aspect()`** which writes the live signal aspect to the real `SignalState` record via `network.set_signal_state()` at three points (advance, hold, clear). The ONLY layer allowed to mutate Block occupancy. | — |
 | `main.py` | FastAPI routes: REST save/load, WebSocket streaming | — |
 
 If you ever find yourself mutating `block.occupied_by` from inside `arbitration.py` or
@@ -111,59 +120,83 @@ whichever caps apply).
 
 ## `models.py` field reference
 
+*(Verified against the actual repo after Phase 5 — this superseded an earlier draft
+version of this section that used different enum/field names. If you see references to
+`TrainPriority`, `GeometryPoint`, or `SignalState`-as-enum anywhere else, e.g. in old
+phase prompts, they refer to the pre-verification names below and need updating.)*
+
 ### Enumerations
 | Enum | Members |
 |---|---|
-| `SignalState` | `RED`, `YELLOW`, `GREEN` |
-| `TrainPriority` | `EXPRESS=1`, `ORDINARY=2`, `LOCAL=3` |
-| `DriverDutyStatus` | `NORMAL`, `OVER_DUTY` |
-| `TrackDirectionality` | `BIDIRECTIONAL`, `UNIDIRECTIONAL` |
+| `StationType` | `terminus`, `through`, `junction_station` |
+| `TrackDirectionality` | `bidirectional`, `one_way_forward`, `one_way_reverse` |
+| `DriverDutyStatus` | `normal`, `over_duty` |
+| `SignalStateValue` | `green`, `red`, `caution` |
+| `PriorityTier` | `EXPRESS=1`, `ORDINARY=2`, `LOCAL=3` |
 
 ### Sub-models
 
-**`GeometryPoint`** — `x: float`, `y: float`, `cx: float?` (Bézier control-point x),
-`cy: float?` (Bézier control-point y)
+**`Point`** — `x: float`, `y: float`. **No Bézier control-point fields** (`cx`/`cy`
+were dropped) — curve geometry is an ordered list of plain points, not a
+single-control-point quadratic bezier. Phase 6's editor prompt (drag a bezier
+control-point handle) needs to be revised to a multi-point spline/polyline approach, or
+`cx`/`cy` need to be reintroduced — decide which before starting Phase 6.
 
-**`MaintenanceWindow`** — `start_iso: str` (ISO-8601 UTC), `end_iso: str`
+**`MaintenanceWindow`** — `start_iso: str` (ISO-8601), `end_iso: str` (ISO-8601)
 
-**`ScheduleEntry`** — `scheduled_arrival: str?`, `scheduled_departure: str?`,
-`expected_arrival: str?`, `expected_departure: str?`, `actual_arrival: str?`,
-`actual_departure: str?`
+**`ScheduleEntry`** — `scheduled_arrival: datetime?`, `scheduled_departure: datetime?`,
+`expected_arrival: datetime?` (live-updated by arbitration), `actual_arrival: datetime?`
+(set once, then frozen). **No `expected_departure` or `actual_departure`** — departure
+timing beyond `scheduled_departure` is not currently tracked; confirm that's intentional
+before Phase 5/9 code assumes it exists.
 
-**`RouteHop`** — `node_id: str`, `segment_id: str` (segment traversed **to reach** this
-node)
+**`RouteHop`** — `node_id: str`, `segment_id: str?` (segment used to reach this hop;
+**null for the origin hop**, since there's nothing to traverse to reach your own start).
 
 ### Core domain models
+
+**`WeatherCell`** — `id: str`, `intensity: float` [0–1], `affected_block_ids: list[str]`
+
+**`SignalState`** *(standalone model, not a bare enum value on Junction — confirmed
+actively written, not dead code)* —
+`id: str`, `block_id: str` (block this signal guards), `state: SignalStateValue`
+(default `GREEN`), `controlled_by_junction_id: str?` (null = autonomous signal not
+governed by junction arbitration). `network.py`'s `_ensure_junction_signal()` /
+`register_junction_signals()` create and wire these records per approach; `engine.py`'s
+`_persist_signal_aspect()` keeps `.state` in sync with the live aspect on every
+advance/hold/clear. `to_dict()` now emits real, non-empty `"signals"` data.
 
 **`Block`** — `id: str`, `segment_id: str`, `length_km: float` (>0),
 `occupied_by: str?` (train_id), `weather_cell_id: str?`,
 `speed_restriction: float?` (km/h cap), `maintenance_window: MaintenanceWindow?`
 
 **`Segment`** — `id: str`, `start_node_id: str`, `end_node_id: str`,
-`block_ids: list[str]` (ordered start→end)
+`ordered_block_ids: list[str]` (index 0 = adjacent to start node)
 
 **`Junction`** — `id: str`, `connected_segment_ids: list[str]`,
-`signal_states: dict[str, SignalState]` (keyed by approach `segment_id`)
+`signal_states: dict[str, str]` — **keys are approach `segment_id`, values are
+`SignalState.id`** (a foreign key, not an inline enum) — look up the actual state via
+the `SignalState` model above.
 
 **`Station`** — `id: str`, `name: str`, `platform_tracks: list[str]` (track IDs),
-`rotation_deg: float` (default 0.0), `station_type: str`
-(`"terminus"` / `"through"` / `"junction"`)
+`rotation_deg: float` (default 0.0), `station_type: StationType` (default `through`)
 
-**`Track`** — `id: str`, `segment_id: str`, `geometry: list[GeometryPoint]`,
-`directionality: TrackDirectionality`, `restricted_to_priority: int?` (1/2/3)
+**`Track`** — `id: str`, `segment_id: str`, `geometry: list[Point]`,
+`directionality: TrackDirectionality` (default `bidirectional`),
+`restricted_to_priority: int?` [1–3] — read as "minimum priority tier allowed," null =
+unrestricted
 
-**`Train`** — `id: str`, `name: str`, `color: str` (hex, e.g. `#E63946`),
-`priority: TrainPriority`, `num_carriages: int` (≥1), `max_speed: float` (km/h),
-`avg_speed: float` (km/h), `route: list[RouteHop]`,
-`schedule: dict[str, ScheduleEntry]` (keyed by `node_id`),
-`driver_duty_status: DriverDutyStatus`, `current_block_id: str?`,
-`current_position_in_block: float` (0.0–1.0)
+**`Train`** — `id: str`, `name: str`, `color: str` (CSS hex, e.g. `#e63946`),
+`priority: PriorityTier` (default `ORDINARY`), `num_carriages: int` (≥1),
+`max_speed: float` (>0, km/h), `avg_speed: float` (>0, km/h),
+`route: list[RouteHop]`, `schedule: dict[str, ScheduleEntry]` (keyed by `node_id`),
+`driver_duty_status: DriverDutyStatus` (default `normal`), `current_block_id: str?`
+(null if not yet entered or journey complete), `current_position_in_block: float` [0–1]
 
-**`Schedule`** *(standalone API transport)* — `train_id: str`, `node_id: str`,
-`entry: ScheduleEntry`
-
-**`WeatherCell`** — `id: str`, `intensity: float` (0.0–1.0),
-`affected_block_ids: list[str]`
+**Not confirmed present** — the standalone `Schedule` transport model
+(`train_id`/`node_id`/`entry`) referenced in an earlier draft of this doc did not appear
+in this listing. Confirm whether it still exists (may just be outside the viewed line
+range) or was removed in favor of reading `Train.schedule` directly.
 
 ## Build status
 
@@ -173,6 +206,12 @@ node)
 - [x] Phase 3 — Junction arbitration & signals (`arbitration.py`)
 - [x] Phase 4 — Weather, speed restrictions, maintenance (`conditions.py`)
 - [x] Phase 5 — Collision prevention, sidings, sim clock (`engine.py`)
+- [x] **Post-Phase-5 fix** — `SignalState` records were being defined but never
+  persisted (`_signals` always empty, `resolve()` never wrote to it). Fixed:
+  `network.py` now wires a real `SignalState` per approach via
+  `_ensure_junction_signal()`/`register_junction_signals()`; `engine.py`'s
+  `_persist_signal_aspect()` writes the live aspect on every advance/hold/clear, logging
+  a `WARNING` (not raising) on any lookup failure. Full suite confirmed green after the fix.
 - [ ] Phase 6 — Editor canvas & track geometry
 - [ ] Phase 7 — Editor: trains, validation, save/load
 - [ ] Phase 8 — Simulator: rendering & movement
