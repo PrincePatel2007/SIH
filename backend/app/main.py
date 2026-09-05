@@ -12,6 +12,7 @@ In production, replace allow_origins with your actual domain.
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
+from app.simulations_router import router as simulations_router
 
 app = FastAPI(
     title="TrainNet ETA Simulator",
@@ -33,6 +34,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+app.include_router(simulations_router)
 
 # ---------------------------------------------------------------------------
 # REST endpoints

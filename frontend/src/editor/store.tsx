@@ -1,8 +1,12 @@
 /**
- * store.tsx — in-memory editor state store (Phase 6).
+ * store.tsx — in-memory editor state store (Phase 7).
  *
- * Uses React context + useReducer. No backend calls — everything lives in
- * component state until Phase 7 wires up save/load.
+ * New in Phase 7:
+ *  - trains (TrainWithPos)
+ *  - segmentOverrides (speed cap + maintenance window per segment)
+ *  - routeBuilding ephemeral state (add_route_hop validates connectivity inline)
+ *  - LOAD_LAYOUT (bulk-replace from a loaded LayoutPayload)
+ *  - UPDATE_TRAIN_DWELL (per-node dwell override for schedule authoring)
  */
 
 import {
@@ -14,21 +18,20 @@ import {
 } from "react";
 import type {
   Track,
-  TrackDirectionality,
-  PriorityTier,
   Segment,
   Station,
   Junction,
   SignalState,
-  SignalStateValue,
-  StationType,
+  Train,
+  RouteHop,
+  MaintenanceWindow,
 } from "../types";
 import type { Point } from "../types";
 import { newId } from "./utils/ids";
 import { findSnap, SNAP_DISTANCE_PX } from "./utils/geometry";
 
 // ---------------------------------------------------------------------------
-// Internal extended types — carry canvas position for rendering
+// Internal extended types — carry canvas positions (not serialised)
 // ---------------------------------------------------------------------------
 
 export interface JunctionWithPos extends Junction {
@@ -43,6 +46,33 @@ export interface SignalWithPos extends SignalState {
   _pos: Point;
 }
 
+export interface TrainWithPos extends Train {
+  _pos: Point;
+  /** node_id → dwell minutes (editor-authored, used by backend build_schedule) */
+  _dwell: Record<string, number>;
+}
+
+// ---------------------------------------------------------------------------
+// Segment override (speed cap + maintenance window authored in editor)
+// ---------------------------------------------------------------------------
+
+export interface SegmentOverride {
+  segment_id: string;
+  speed_restriction: number | null;
+  maintenance_window: MaintenanceWindow | null;
+}
+
+// ---------------------------------------------------------------------------
+// Route building state
+// ---------------------------------------------------------------------------
+
+export interface RouteBuildingState {
+  trainId: string;
+  hops: RouteHop[];
+  /** True when the last ADD_ROUTE_HOP was rejected (nodes not connected). */
+  invalidLastHop: boolean;
+}
+
 // ---------------------------------------------------------------------------
 // State shape
 // ---------------------------------------------------------------------------
@@ -53,7 +83,10 @@ export interface EditorState {
   stations: Station[];
   junctions: Junction[];
   signals: SignalState[];
+  trains: Train[];
+  segmentOverrides: SegmentOverride[];
   selection: Set<string>;
+  routeBuilding: RouteBuildingState | null;
 }
 
 const initialState: EditorState = {
@@ -62,7 +95,10 @@ const initialState: EditorState = {
   stations: [],
   junctions: [],
   signals: [],
+  trains: [],
+  segmentOverrides: [],
   selection: new Set(),
+  routeBuilding: null,
 };
 
 // ---------------------------------------------------------------------------
@@ -87,15 +123,54 @@ export type EditorAction =
   | { type: "ADD_SIGNAL"; position: Point; blockId: string; junctionId?: string }
   | { type: "UPDATE_SIGNAL"; id: string; patch: Partial<Pick<SignalState, "state" | "controlled_by_junction_id">> }
   | { type: "MOVE_SIGNAL"; id: string; position: Point }
+  // Train
+  | { type: "ADD_TRAIN"; position: Point; name?: string }
+  | {
+      type: "UPDATE_TRAIN";
+      id: string;
+      patch: Partial<Pick<Train, "name" | "color" | "num_carriages" | "priority" | "max_speed" | "avg_speed" | "driver_duty_status">>;
+    }
+  | { type: "MOVE_TRAIN"; id: string; position: Point }
+  // Route building
+  | { type: "START_ROUTE_BUILD"; trainId: string; originNodeId: string }
+  | { type: "ADD_ROUTE_HOP"; nodeId: string }
+  | { type: "FINISH_ROUTE_BUILD" }
+  | { type: "CANCEL_ROUTE_BUILD" }
+  // Per-node dwell
+  | { type: "UPDATE_TRAIN_DWELL"; trainId: string; nodeId: string; minutes: number }
+  // Segment overrides
+  | {
+      type: "UPDATE_SEGMENT_OVERRIDE";
+      segmentId: string;
+      patch: Partial<Pick<SegmentOverride, "speed_restriction" | "maintenance_window">>;
+    }
   // Selection
   | { type: "SET_SELECTION"; ids: string[] }
   | { type: "CLEAR_SELECTION" }
   | { type: "TOGGLE_SELECTION"; id: string }
   // Delete
-  | { type: "REMOVE_ELEMENT"; id: string };
+  | { type: "REMOVE_ELEMENT"; id: string }
+  // Load
+  | { type: "LOAD_LAYOUT"; payload: LoadedLayout };
+
+/** Shape coming back from GET /api/simulations/{name} (canvas positions included). */
+export interface LoadedLayout {
+  tracks: Track[];
+  segments: Segment[];
+  stations: Station[];
+  junctions: Junction[];
+  signals: SignalState[];
+  trains: Train[];
+  segmentOverrides?: SegmentOverride[];
+  station_positions: Record<string, { x: number; y: number }>;
+  junction_positions: Record<string, { x: number; y: number }>;
+  signal_positions: Record<string, { x: number; y: number }>;
+  train_positions: Record<string, { x: number; y: number }>;
+  authoring_hints?: Array<{ train_id: string; origin_departure_iso: string; dwell_minutes: Record<string, number> }>;
+}
 
 // ---------------------------------------------------------------------------
-// Helpers
+// Internal helpers
 // ---------------------------------------------------------------------------
 
 function collectEndpoints(tracks: Track[], excludeTrackId?: string): Point[] {
@@ -132,7 +207,7 @@ function mergeJunctions(
   if (!movedTrack) return junctions;
   const movedSegId = movedTrack.segment_id;
 
-  let existing = junctions.find((j) => {
+  const existing = junctions.find((j) => {
     const pos = (j as JunctionWithPos)._pos;
     if (!pos) return false;
     const dx = pos.x - finalPoint.x;
@@ -141,9 +216,8 @@ function mergeJunctions(
   }) as JunctionWithPos | undefined;
 
   if (!existing) {
-    const jctId = newId("jct");
     const newJct: JunctionWithPos = {
-      id: jctId,
+      id: newId("jct"),
       connected_segment_ids: [movedSegId],
       signal_states: {},
       _pos: finalPoint,
@@ -161,6 +235,22 @@ function mergeJunctions(
   return junctions;
 }
 
+/**
+ * Find a segment connecting nodeA ↔ nodeB (either direction).
+ * Returns the segment or undefined if none exists.
+ */
+function findConnectingSegment(
+  segments: Segment[],
+  nodeA: string,
+  nodeB: string
+): Segment | undefined {
+  return segments.find(
+    (s) =>
+      (s.start_node_id === nodeA && s.end_node_id === nodeB) ||
+      (s.start_node_id === nodeB && s.end_node_id === nodeA)
+  );
+}
+
 // ---------------------------------------------------------------------------
 // Reducer
 // ---------------------------------------------------------------------------
@@ -168,7 +258,7 @@ function mergeJunctions(
 function reducer(state: EditorState, action: EditorAction): EditorState {
   switch (action.type) {
 
-    // ── Track ────────────────────────────────────────────────────────────────
+    // ── Track ─────────────────────────────────────────────────────────────────
 
     case "ADD_TRACK": {
       if (action.points.length < 2) return state;
@@ -233,7 +323,7 @@ function reducer(state: EditorState, action: EditorAction): EditorState {
       return stateWithTrack;
     }
 
-    // ── Station ──────────────────────────────────────────────────────────────
+    // ── Station ───────────────────────────────────────────────────────────────
 
     case "ADD_STATION": {
       const id = newId("sta");
@@ -262,7 +352,7 @@ function reducer(state: EditorState, action: EditorAction): EditorState {
       return { ...state, stations };
     }
 
-    // ── Junction ─────────────────────────────────────────────────────────────
+    // ── Junction ──────────────────────────────────────────────────────────────
 
     case "ADD_JUNCTION": {
       const id = newId("jct");
@@ -289,7 +379,7 @@ function reducer(state: EditorState, action: EditorAction): EditorState {
       return { ...state, junctions };
     }
 
-    // ── Signal ───────────────────────────────────────────────────────────────
+    // ── Signal ────────────────────────────────────────────────────────────────
 
     case "ADD_SIGNAL": {
       const id = newId("sig");
@@ -317,7 +407,132 @@ function reducer(state: EditorState, action: EditorAction): EditorState {
       return { ...state, signals };
     }
 
-    // ── Selection ────────────────────────────────────────────────────────────
+    // ── Train ─────────────────────────────────────────────────────────────────
+
+    case "ADD_TRAIN": {
+      const id = newId("trn");
+      const train: TrainWithPos = {
+        id,
+        name: action.name ?? `Train ${id.slice(-4)}`,
+        color: "#3b82f6",
+        priority: 2,
+        num_carriages: 4,
+        max_speed: 120,
+        avg_speed: 80,
+        route: [],
+        schedule: {},
+        driver_duty_status: "normal",
+        current_block_id: null,
+        current_position_in_block: 0.0,
+        _pos: action.position,
+        _dwell: {},
+      };
+      return { ...state, trains: [...state.trains, train] };
+    }
+
+    case "UPDATE_TRAIN": {
+      const trains = state.trains.map((t) =>
+        t.id === action.id ? { ...t, ...action.patch } : t
+      );
+      return { ...state, trains };
+    }
+
+    case "MOVE_TRAIN": {
+      const trains = state.trains.map((t) =>
+        t.id === action.id ? { ...t, _pos: action.position } : t
+      );
+      return { ...state, trains };
+    }
+
+    // ── Route building ────────────────────────────────────────────────────────
+
+    case "START_ROUTE_BUILD": {
+      return {
+        ...state,
+        routeBuilding: {
+          trainId: action.trainId,
+          hops: [{ node_id: action.originNodeId, segment_id: null }],
+          invalidLastHop: false,
+        },
+      };
+    }
+
+    case "ADD_ROUTE_HOP": {
+      const rb = state.routeBuilding;
+      if (!rb) return state;
+
+      const prevHop = rb.hops[rb.hops.length - 1];
+      const prevNodeId = prevHop.node_id;
+      const newNodeId = action.nodeId;
+
+      // Don't allow clicking the same node twice in a row.
+      if (newNodeId === prevNodeId) return state;
+
+      const connecting = findConnectingSegment(state.segments, prevNodeId, newNodeId);
+      if (!connecting) {
+        // Reject — nodes are not connected by any segment.
+        return {
+          ...state,
+          routeBuilding: { ...rb, invalidLastHop: true },
+        };
+      }
+
+      return {
+        ...state,
+        routeBuilding: {
+          ...rb,
+          hops: [...rb.hops, { node_id: newNodeId, segment_id: connecting.id }],
+          invalidLastHop: false,
+        },
+      };
+    }
+
+    case "FINISH_ROUTE_BUILD": {
+      const rb = state.routeBuilding;
+      if (!rb || rb.hops.length < 1) return { ...state, routeBuilding: null };
+      const trains = state.trains.map((t) =>
+        t.id === rb.trainId ? { ...t, route: rb.hops } : t
+      );
+      return { ...state, trains, routeBuilding: null };
+    }
+
+    case "CANCEL_ROUTE_BUILD":
+      return { ...state, routeBuilding: null };
+
+    // ── Per-node dwell ────────────────────────────────────────────────────────
+
+    case "UPDATE_TRAIN_DWELL": {
+      const trains = state.trains.map((t) => {
+        if (t.id !== action.trainId) return t;
+        const twp = t as TrainWithPos;
+        const dwell = { ...twp._dwell, [action.nodeId]: action.minutes };
+        return { ...twp, _dwell: dwell };
+      });
+      return { ...state, trains };
+    }
+
+    // ── Segment overrides ─────────────────────────────────────────────────────
+
+    case "UPDATE_SEGMENT_OVERRIDE": {
+      const existing = state.segmentOverrides.find(
+        (o) => o.segment_id === action.segmentId
+      );
+      if (existing) {
+        const segmentOverrides = state.segmentOverrides.map((o) =>
+          o.segment_id === action.segmentId ? { ...o, ...action.patch } : o
+        );
+        return { ...state, segmentOverrides };
+      }
+      return {
+        ...state,
+        segmentOverrides: [
+          ...state.segmentOverrides,
+          { segment_id: action.segmentId, speed_restriction: null, maintenance_window: null, ...action.patch },
+        ],
+      };
+    }
+
+    // ── Selection ─────────────────────────────────────────────────────────────
 
     case "SET_SELECTION":
       return { ...state, selection: new Set(action.ids) };
@@ -332,22 +547,65 @@ function reducer(state: EditorState, action: EditorAction): EditorState {
       return { ...state, selection: next };
     }
 
-    // ── Delete ───────────────────────────────────────────────────────────────
+    // ── Delete ────────────────────────────────────────────────────────────────
 
     case "REMOVE_ELEMENT": {
       const id = action.id;
-      // Remove from whichever collection contains it; clean up selection too.
       const next = new Set(state.selection);
       next.delete(id);
+      const removedTrack = state.tracks.find((t) => t.id === id);
       return {
         ...state,
-        tracks:    state.tracks.filter((t) => t.id !== id),
-        segments:  state.segments.filter((s) => s.id !== id &&
-                     !state.tracks.find((t) => t.id === id && t.segment_id === s.id)),
-        stations:  state.stations.filter((s) => s.id !== id),
+        tracks: state.tracks.filter((t) => t.id !== id),
+        segments: state.segments.filter(
+          (s) => s.id !== id && !(removedTrack && removedTrack.segment_id === s.id)
+        ),
+        stations: state.stations.filter((s) => s.id !== id),
         junctions: state.junctions.filter((j) => j.id !== id),
-        signals:   state.signals.filter((s) => s.id !== id),
+        signals: state.signals.filter((s) => s.id !== id),
+        trains: state.trains.filter((t) => t.id !== id),
         selection: next,
+      };
+    }
+
+    // ── Load layout ───────────────────────────────────────────────────────────
+
+    case "LOAD_LAYOUT": {
+      const p = action.payload;
+
+      // Rehydrate canvas positions into the _pos fields.
+      const stations = p.stations.map((s) => {
+        const pos = p.station_positions[s.id];
+        return pos ? { ...s, _pos: pos } : { ...s, _pos: { x: 100, y: 100 } };
+      });
+      const junctions = p.junctions.map((j) => {
+        const pos = p.junction_positions[j.id];
+        return pos ? { ...j, _pos: pos } : { ...j, _pos: { x: 200, y: 200 } };
+      });
+      const signals = p.signals.map((s) => {
+        const pos = p.signal_positions[s.id];
+        return pos ? { ...s, _pos: pos } : { ...s, _pos: { x: 300, y: 300 } };
+      });
+      const trains = p.trains.map((t) => {
+        const pos = p.train_positions[t.id];
+        const hint = p.authoring_hints?.find((h) => h.train_id === t.id);
+        return {
+          ...t,
+          _pos: pos ?? { x: 150, y: 150 },
+          _dwell: hint?.dwell_minutes ?? {},
+        };
+      });
+
+      return {
+        tracks: p.tracks,
+        segments: p.segments,
+        stations,
+        junctions,
+        signals,
+        trains,
+        segmentOverrides: p.segmentOverrides ?? [],
+        selection: new Set(),
+        routeBuilding: null,
       };
     }
 
