@@ -1,176 +1,116 @@
-/* ============================================================
-   TrainNet ETA Simulator — global styles
-   ============================================================ */
+/* App.css — global layout and chrome for the editor shell */
 
-@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap");
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
 
-/* ── Reset / base ─────────────────────────────────────────── */
-
-*,
-*::before,
-*::after {
+*, *::before, *::after {
   box-sizing: border-box;
   margin: 0;
   padding: 0;
 }
 
-:root {
-  /* Colour palette */
-  --c-bg:          #0d1117;
-  --c-surface:     #161b22;
-  --c-surface-2:   #1c2333;
-  --c-border:      #30363d;
-  --c-text:        #e6edf3;
-  --c-text-muted:  #7d8590;
-  --c-accent:      #3b82f6;
-  --c-ok:          #22c55e;
-  --c-warn:        #f59e0b;
-  --c-error:       #ef4444;
-
-  /* Typography */
-  --font: "Inter", system-ui, sans-serif;
-  --radius: 6px;
-
-  /* Layout */
-  --topbar-h: 52px;
-}
-
-html,
-body,
-#root {
+html, body, #root {
   height: 100%;
-  width: 100%;
+  background: #020617;
+  color: #e2e8f0;
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  font-size: 14px;
   overflow: hidden;
 }
 
-body {
-  background: var(--c-bg);
-  color: var(--c-text);
-  font-family: var(--font);
-  -webkit-font-smoothing: antialiased;
-}
-
-/* ── Shell layout ─────────────────────────────────────────── */
+/* ── Shell ──────────────────────────────────────────────────── */
 
 .app-shell {
   display: flex;
   flex-direction: column;
-  height: 100%;
-  width: 100%;
+  height: 100vh;
 }
 
-/* ── Top bar ──────────────────────────────────────────────── */
+/* ── Top bar ────────────────────────────────────────────────── */
 
 .topbar {
-  height: var(--topbar-h);
-  min-height: var(--topbar-h);
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 20px;
-  background: var(--c-surface);
-  border-bottom: 1px solid var(--c-border);
-  backdrop-filter: blur(8px);
+  padding: 0 16px;
+  height: 44px;
+  background: #0f172a;
+  border-bottom: 1px solid #1e293b;
+  flex-shrink: 0;
   z-index: 10;
 }
 
 .topbar__brand {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
 }
 
 .topbar__logo {
-  font-size: 22px;
-  line-height: 1;
+  font-size: 20px;
 }
 
 .topbar__title {
-  font-size: 15px;
+  font-size: 14px;
   font-weight: 600;
-  letter-spacing: 0.01em;
-  color: var(--c-text);
+  color: #f1f5f9;
+  letter-spacing: -0.01em;
 }
 
-/* ── Backend status indicator ─────────────────────────────── */
+/* ── Connection indicator ───────────────────────────────────── */
 
 .indicator {
   display: flex;
   align-items: center;
-  gap: 7px;
-  padding: 5px 12px;
-  border-radius: 999px;
-  border: 1px solid var(--c-border);
-  background: var(--c-surface-2);
+  gap: 6px;
   font-size: 12px;
-  font-weight: 500;
-  transition: border-color 0.25s ease, background 0.25s ease;
+  padding: 4px 10px;
+  border-radius: 20px;
+  border: 1px solid transparent;
 }
+
+.indicator--checking {
+  border-color: #334155;
+  color: #64748b;
+}
+.indicator--checking .indicator__dot {
+  background: #64748b;
+  animation: pulse 1.2s infinite;
+}
+
+.indicator--ok {
+  border-color: #166534;
+  color: #4ade80;
+}
+.indicator--ok .indicator__dot { background: #4ade80; }
+
+.indicator--error {
+  border-color: #7f1d1d;
+  color: #f87171;
+}
+.indicator--error .indicator__dot { background: #f87171; }
 
 .indicator__dot {
-  width: 8px;
-  height: 8px;
+  width: 7px;
+  height: 7px;
   border-radius: 50%;
-  flex-shrink: 0;
-  transition: background 0.25s ease, box-shadow 0.25s ease;
 }
-
-.indicator__label {
-  color: var(--c-text-muted);
-}
-
-/* Checking state */
-.indicator--checking .indicator__dot {
-  background: var(--c-warn);
-  animation: pulse 1.2s ease-in-out infinite;
-}
-
-/* Connected state */
-.indicator--ok {
-  border-color: rgba(34, 197, 94, 0.35);
-  background: rgba(34, 197, 94, 0.08);
-}
-.indicator--ok .indicator__dot {
-  background: var(--c-ok);
-  box-shadow: 0 0 6px var(--c-ok);
-}
-.indicator--ok .indicator__label {
-  color: var(--c-ok);
-}
-
-/* Error state */
-.indicator--error {
-  border-color: rgba(239, 68, 68, 0.35);
-  background: rgba(239, 68, 68, 0.08);
-}
-.indicator--error .indicator__dot {
-  background: var(--c-error);
-  box-shadow: 0 0 6px var(--c-error);
-}
-.indicator--error .indicator__label {
-  color: var(--c-error);
-}
-
-/* ── Canvas area ──────────────────────────────────────────── */
-
-.canvas-area {
-  flex: 1;
-  overflow: hidden;
-  background:
-    radial-gradient(ellipse at 20% 50%, rgba(59, 130, 246, 0.04) 0%, transparent 60%),
-    radial-gradient(ellipse at 80% 20%, rgba(99, 102, 241, 0.04) 0%, transparent 60%),
-    var(--c-bg);
-  /* Subtle dot grid to evoke an engineering canvas */
-  background-image:
-    radial-gradient(ellipse at 20% 50%, rgba(59, 130, 246, 0.04) 0%, transparent 60%),
-    radial-gradient(ellipse at 80% 20%, rgba(99, 102, 241, 0.04) 0%, transparent 60%),
-    radial-gradient(circle, var(--c-border) 1px, transparent 1px);
-  background-size: auto, auto, 32px 32px;
-}
-
-/* ── Animations ───────────────────────────────────────────── */
 
 @keyframes pulse {
   0%, 100% { opacity: 1; }
-  50%       { opacity: 0.35; }
+  50%       { opacity: 0.3; }
+}
+
+/* ── Editor layout ──────────────────────────────────────────── */
+
+.editor-layout {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+}
+
+.canvas-area {
+  flex: 1;
+  background: #020617;
+  overflow: hidden;
+  position: relative;
 }

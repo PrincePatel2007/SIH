@@ -1,45 +1,47 @@
-import { useEffect, useRef, useState } from "react";
-import { Stage, Layer, Text } from "react-konva";
+import { useEffect, useState } from "react";
 import { checkHealth } from "./api";
+import { EditorStoreProvider } from "./editor/store";
+import EditorCanvas, { type ToolMode } from "./editor/EditorCanvas";
+import EditorToolbar, { KEY_MAP } from "./editor/EditorToolbar";
+import PropertyPanel from "./editor/PropertyPanel";
 import "./App.css";
 
 type ConnectionStatus = "checking" | "connected" | "error";
 
 export default function App() {
   const [status, setStatus] = useState<ConnectionStatus>("checking");
-  const [stageSize, setStageSize] = useState({ width: 800, height: 600 });
-  const containerRef = useRef<HTMLDivElement>(null);
+  const [tool, setTool] = useState<ToolMode>("select");
 
-  // Ping the backend health endpoint on mount
+  // Backend health ping
   useEffect(() => {
     checkHealth()
       .then(() => setStatus("connected"))
       .catch(() => setStatus("error"));
   }, []);
 
-  // Resize the Konva stage to fill its container
+  // Global keyboard shortcuts for tool switching
   useEffect(() => {
-    const el = containerRef.current;
-    if (!el) return;
-
-    const observer = new ResizeObserver((entries) => {
-      const entry = entries[0];
-      if (entry) {
-        setStageSize({
-          width: entry.contentRect.width,
-          height: entry.contentRect.height,
-        });
-      }
-    });
-    observer.observe(el);
-    return () => observer.disconnect();
+    const onKey = (e: KeyboardEvent) => {
+      // Ignore when typing in an input/select
+      if (
+        document.activeElement &&
+        ["INPUT", "SELECT", "TEXTAREA"].includes(
+          (document.activeElement as HTMLElement).tagName
+        )
+      )
+        return;
+      const next = KEY_MAP[e.key.toLowerCase()];
+      if (next) setTool(next);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
   }, []);
 
   const statusLabel =
     status === "checking"
       ? "Backend: checking…"
       : status === "connected"
-        ? "Backend: connected"
+        ? "Backend: connected ✓"
         : "Backend: unreachable";
 
   const statusClass =
@@ -50,41 +52,31 @@ export default function App() {
         : "indicator--error";
 
   return (
-    <div className="app-shell">
-      {/* ── Top bar ──────────────────────────────────────────── */}
-      <header className="topbar">
-        <div className="topbar__brand">
-          <span className="topbar__logo">🚆</span>
-          <span className="topbar__title">TrainNet ETA Simulator</span>
-        </div>
-        <div className={`indicator ${statusClass}`} id="backend-status-indicator">
-          <span className="indicator__dot" />
-          <span className="indicator__label">{statusLabel}</span>
-        </div>
-      </header>
+    <EditorStoreProvider>
+      <div className="app-shell">
+        {/* ── Top bar ─────────────────────────────────────────── */}
+        <header className="topbar">
+          <div className="topbar__brand">
+            <span className="topbar__logo">🚆</span>
+            <span className="topbar__title">TrainNet ETA Simulator — Editor</span>
+          </div>
+          <div className={`indicator ${statusClass}`} id="backend-status-indicator">
+            <span className="indicator__dot" />
+            <span className="indicator__label">{statusLabel}</span>
+          </div>
+        </header>
 
-      {/* ── Canvas area ──────────────────────────────────────── */}
-      <main className="canvas-area" ref={containerRef}>
-        <Stage
-          width={stageSize.width}
-          height={stageSize.height}
-          id="main-stage"
-        >
-          <Layer>
-            {/* Placeholder text — will be replaced by network geometry in later phases */}
-            <Text
-              text="Canvas ready — author your rail network here"
-              x={stageSize.width / 2}
-              y={stageSize.height / 2}
-              offsetX={180}
-              offsetY={10}
-              fontSize={16}
-              fill="#64748b"
-              fontFamily="'Inter', sans-serif"
-            />
-          </Layer>
-        </Stage>
-      </main>
-    </div>
+        {/* ── Toolbar ─────────────────────────────────────────── */}
+        <EditorToolbar active={tool} onChange={setTool} />
+
+        {/* ── Editor layout ───────────────────────────────────── */}
+        <div className="editor-layout">
+          <main className="canvas-area" id="canvas-area">
+            <EditorCanvas tool={tool} />
+          </main>
+          <PropertyPanel />
+        </div>
+      </div>
+    </EditorStoreProvider>
   );
 }
